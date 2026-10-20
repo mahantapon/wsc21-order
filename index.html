@@ -92,6 +92,22 @@ h1 .no { color: var(--sky); }
 .history ul { margin: 0; padding-left: 18px; }
 .history .sumline { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding-top: 6px; font-weight: 700; }
 .chip input:disabled + span { opacity: .4; cursor: not-allowed; }
+.paysum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.paysum div { background: var(--bg); border-radius: 10px; padding: 8px 10px; display: grid; min-width: 0; }
+.paysum b { font-size: 12px; color: var(--muted); font-weight: 600; }
+.paysum strong { font-size: 18px; line-height: 1.3; }
+.paysum .due strong { color: var(--coral); }
+.paysum .paid strong { color: var(--ok); }
+.filepick { position: relative; display: grid; place-items: center; gap: 2px; border: 2px dashed var(--line); border-radius: 12px; padding: 18px 12px;
+  background: var(--bg); cursor: pointer; font-weight: 700; color: var(--sky); text-align: center; }
+.filepick small { font-weight: 400; color: var(--muted); font-size: 12.5px; }
+.filepick input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.filepick:focus-within { outline: 3px solid var(--sky); outline-offset: 2px; }
+.slipprev { max-height: 280px; width: auto; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); justify-self: start; }
+.slips { display: grid; gap: 6px; }
+.sliprow { display: flex; justify-content: space-between; align-items: center; gap: 6px 10px; flex-wrap: wrap; background: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
+.okmsg { background: var(--ok-bg); border-radius: 10px; padding: 10px 12px; font-size: 14.5px; }
+.pill.wait { background: var(--chip); color: var(--muted); }
 .freeused { font-size: 13.5px; background: var(--ok-bg); border-radius: 10px; padding: 8px 12px; }
 
 /* cards */
@@ -244,6 +260,25 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     </label>
   </section>
 
+  <section class="card" id="payCard" aria-labelledby="h-pay" hidden>
+    <h2 id="h-pay">แนบสลิปโอนเงิน</h2>
+    <div class="paysum num" id="paySum"></div>
+    <p class="hint">โอนตามบัญชีที่กรรมการแจ้งในกลุ่ม แล้วแนบรูปสลิปที่นี่ กรรมการจะตรวจและยืนยันให้ · โอนหลายครั้งก็แนบได้หลายใบ</p>
+    <label class="field" for="payAmount"><span>ยอดที่โอน (บาท) <span class="req">*</span></span>
+      <input type="text" id="payAmount" inputmode="decimal" autocomplete="off" placeholder="เช่น 685">
+    </label>
+    <label class="filepick" for="payFile">
+      <input type="file" id="payFile" accept="image/*">
+      <span id="payPickText">+ เลือกรูปสลิป</span>
+      <small>ภาพหน้าจอจากแอปธนาคาร หรือถ่ายรูปสลิป</small>
+    </label>
+    <img id="payPreview" class="slipprev" alt="สลิปที่เลือก" hidden>
+    <div class="err" id="payErr" hidden></div>
+    <div class="okmsg" id="payOk" hidden></div>
+    <button type="button" class="btn sunbtn" id="paySend" disabled>ส่งสลิป</button>
+    <div class="slips" id="paySlips"></div>
+  </section>
+
   <section class="card" aria-labelledby="h-hood">
     <h2 id="h-hood">เสื้อ Hood <span class="price">ตัวเพิ่ม 290 ฿</span></h2>
     <div class="photo"><img src="img/hood.jpg" width="1100" height="875" alt="แบบเสื้อ Hood สีครีม หน้าอกปัก 21st หลัง NO limit #wscรุ่น21"></div>
@@ -335,7 +370,8 @@ var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function blank(keep) { return { name: keep ? keep.name : '', email: keep ? keep.email : '', contact: keep ? keep.contact : '', hoodFree: '', hood: {}, tee: {}, umbrella: 0, gifts: [], note: '' }; }
 var S = blank();
 var R = { gifts: [], orderers: [], closed: Date.now() > CLOSE_AT.getTime(), loaded: false };
-var H = { email: '', orders: [], loading: false }; // this parent's earlier orders
+var H = { email: '', orders: [], slips: [], loading: false }; // this parent's earlier orders and slips
+var P = { image: '', amountTouched: false, cid: '' }; // slip being attached
 var armed = null; // pending duplicate confirmation: 'hood' | 'tee'
 
 function $(id) { return document.getElementById(id); }
@@ -505,17 +541,18 @@ function onEmail() {
 }
 function lookupEmail() {
   var em = normEmail(S.email);
-  if (!EMAIL_RE.test(em)) { H = { email: '', orders: [], loading: false }; renderHistory(); update(); return; }
+  if (!EMAIL_RE.test(em)) { H = { email: '', orders: [], slips: [], loading: false }; renderHistory(); update(); return; }
   if (em === H.email && !H.loading) return;
-  H = { email: em, orders: [], loading: true }; renderHistory();
+  H = { email: em, orders: [], slips: [], loading: true }; renderHistory();
   getJSON('action=mine&email=' + encodeURIComponent(em), 'orders').then(function (d) {
     if (normEmail(S.email) !== em) return;
-    H = { email: em, orders: (d && d.ok && d.orders) || [], loading: false };
+    H = { email: em, orders: (d && d.ok && d.orders) || [], slips: (d && d.ok && d.slips) || [], loading: false };
     renderHistory(); update();
   }).catch(function () { H.loading = false; renderHistory(); });
 }
 function renderHistory() {
   var box = $('history');
+  renderPay();
   if (!H.email) { box.hidden = true; return; }
   box.hidden = false;
   if (H.loading) { box.innerHTML = '<span class="hint">กำลังดูยอดที่เคยสั่งของอีเมลนี้…</span>'; return; }
@@ -524,7 +561,88 @@ function renderHistory() {
   box.innerHTML = '<div class="head"><span class="pill fund">เคยสั่งแล้ว ' + H.orders.length + ' ครั้ง</span> รวม ' + c.pieces + ' ชิ้น</div>' +
     '<ul>' + H.orders.map(function (o) { return '<li><b>' + esc(o.id) + '</b> · ' + when(o.ts) + ' — ' + esc(itemsText(o)) + '</li>'; }).join('') + '</ul>' +
     '<div class="sumline num"><span>ยอดที่สั่งไปแล้ว</span><span>' + baht(sum) + (c.giftTee ? ' + เสื้อยืดครู' : '') + '</span></div>' +
+    (H.slips.length ? '<div class="num">แนบสลิปแล้ว ' + H.slips.length + ' ใบ รวม ' + baht(paidSum()) + '</div>' : '') +
     '<div class="hint">สั่งเพิ่มได้เลย ระบบจะรวมยอดเข้าบ้านเดียวกัน</div>';
+}
+
+/* ---------- payment slip ---------- */
+function paidSum() { return H.slips.reduce(function (t, x) { return t + (Number(x.amount) || 0); }, 0); }
+function dueSum() { return H.orders.reduce(function (t, o) { return t + (o.total || 0); }, 0); }
+function renderPay() {
+  var card = $('payCard');
+  card.hidden = !(H.email && H.orders.length);
+  if (card.hidden) return;
+  var due = dueSum(), paid = paidSum(), left = Math.max(0, due - paid);
+  var tee = H.orders.reduce(function (t, o) { return t + (o.giftTeePending || 0); }, 0);
+  $('paySum').innerHTML = '<div><b>ยอดสั่ง</b><strong>' + baht(due) + '</strong></div>' +
+    '<div class="paid"><b>แนบสลิปแล้ว</b><strong>' + baht(paid) + '</strong></div>' +
+    '<div class="due"><b>คงเหลือ</b><strong>' + baht(left) + '</strong></div>' +
+    (tee ? '<p class="hint" style="grid-column:1/-1;margin:0">ยังไม่รวมเสื้อยืดให้ครู ' + tee + ' ตัว (ราคาตามไซส์ กรรมการจะแจ้ง)</p>' : '');
+  if (!P.amountTouched) $('payAmount').value = left ? String(left) : '';
+  $('paySlips').innerHTML = H.slips.map(function (x) {
+    return '<div class="sliprow num"><span><b>' + esc(x.id) + '</b> · ' + when(x.ts) + ' · ' + baht(Number(x.amount) || 0) + '</span>' +
+      (x.checked ? '<span class="pill ok">กรรมการตรวจแล้ว</span>' : '<span class="pill wait">รอตรวจ</span>') + '</div>';
+  }).join('');
+  payReady();
+}
+function payAmount() { var n = Number(String($('payAmount').value).replace(/[^\d.]/g, '')); return n > 0 ? n : 0; }
+function payReady() { $('paySend').disabled = !(P.image && payAmount() && H.orders.length); }
+function shrink(file) {
+  return new Promise(function (resolve, reject) {
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      var w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, 1400 / Math.max(w, h));
+      var c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+      var ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      var q = 0.8, out = c.toDataURL('image/jpeg', q);
+      while (out.length > 1400000 && q > 0.35) { q -= 0.15; out = c.toDataURL('image/jpeg', q); }
+      resolve(out);
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('เปิดรูปนี้ไม่ได้ ลองเลือกเป็นไฟล์ JPG หรือ PNG')); };
+    img.src = url;
+  });
+}
+function pickSlip() {
+  var f = $('payFile').files && $('payFile').files[0];
+  $('payErr').hidden = true; $('payOk').hidden = true;
+  if (!f) return;
+  $('payPickText').textContent = 'กำลังเตรียมรูป…';
+  shrink(f).then(function (data) {
+    P.image = data; P.cid = newCid();
+    $('payPreview').src = data; $('payPreview').hidden = false;
+    $('payPickText').textContent = 'เปลี่ยนรูปสลิป';
+    payReady();
+  }).catch(function (e) {
+    P.image = ''; $('payPreview').hidden = true; $('payPickText').textContent = '+ เลือกรูปสลิป';
+    $('payErr').hidden = false; $('payErr').textContent = e.message; payReady();
+  });
+}
+function postSlip(payload, tries) {
+  return call(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'slip', slip: payload }) }, 45000, 'slip')
+    .catch(function (e) {
+      if (tries > 0) return wait(1500).then(function () { return postSlip(payload, tries - 1); });
+      return getJSON('action=mine&email=' + encodeURIComponent(payload.email), 'orders').then(function (d) {
+        var hit = d && d.slips && d.slips.filter(function (x) { return x.cid === payload.cid; })[0];
+        if (hit) return { ok: true, slip: hit, slips: d.slips };
+        throw e;
+      });
+    });
+}
+function sendSlip() {
+  var btn = $('paySend'), em = normEmail($('email').value);
+  if (!P.image || !payAmount() || em !== H.email) return;
+  btn.disabled = true; btn.textContent = 'กำลังส่งสลิป…'; $('payErr').hidden = true; $('payOk').hidden = true;
+  postSlip({ email: em, amount: payAmount(), image: P.image, cid: P.cid }, 2).then(function (d) {
+    if (!d || !d.ok) throw new Error((d && d.error) || 'ส่งไม่สำเร็จ');
+    H.slips = d.slips || H.slips.concat([d.slip]);
+    P = { image: '', amountTouched: false, cid: '' };
+    $('payFile').value = ''; $('payPreview').hidden = true; $('payPickText').textContent = '+ เลือกรูปสลิป';
+    $('payOk').hidden = false; $('payOk').textContent = 'ส่งสลิป ' + d.slip.id + ' แล้ว ยอด ' + baht(Number(d.slip.amount) || 0) + ' รอกรรมการตรวจ';
+    renderHistory();
+  }).catch(function (e) {
+    $('payErr').hidden = false; $('payErr').textContent = 'ส่งไม่สำเร็จ: ' + e.message + ' · กดส่งอีกครั้งได้ ระบบจะไม่บันทึกซ้ำ';
+  }).then(function () { btn.textContent = 'ส่งสลิป'; payReady(); });
 }
 
 /* ---------- name duplicate ---------- */
@@ -690,13 +808,13 @@ function send() {
       if (!d || !d.ok) throw new Error((d && d.error) || 'ส่งไม่สำเร็จ');
       var o = d.order, c = calc(sent);
       var dup = (d.dupes || []).filter(function (x) { return x.by !== o.name; });
-      H = { email: normEmail(sent.email), orders: d.orders || [o], loading: false };
+      H = { email: normEmail(sent.email), orders: d.orders || [o], slips: d.slips || H.slips || [], loading: false };
       openSheet('<div class="done"><div class="big">สั่งเรียบร้อยแล้ว</div></div><div>เลขที่คำสั่งซื้อ <span class="code">' + esc(o.id) + '</span></div>' +
         slipHTML(sent, c, true) + grandHTML(H.orders, 'ทั้งหมดของอีเมลนี้') +
         (dup.length ? '<div class="result taken"><div class="head"><span class="pill warn">แจ้งเตือน</span> มีคนสั่งให้ครูท่านเดียวกันไว้ก่อนแล้ว</div><ul>' +
           dup.map(function (x) { return '<li>' + itemName(x.item) + ' ให้ ' + esc(x.teacher) + ' · โดย ' + esc(x.by) + '</li>'; }).join('') + '</ul></div>' : '') +
         '<p class="hint">แคปหน้าจอนี้เก็บไว้ได้ กรรมการจะสรุปยอดและแจ้งช่องทางชำระเงินให้ภายหลัง ต้องการแก้ไขแจ้งกรรมการพร้อมเลขที่คำสั่งซื้อ · สั่งเพิ่มได้ด้วยอีเมลเดิม</p>' +
-        '<button type="button" class="btn primary" id="again">เสร็จสิ้น</button>');
+        '<div class="actions"><button type="button" class="btn ghost" id="again">เสร็จสิ้น</button><button type="button" class="btn sunbtn" id="toPay">แนบสลิปโอนเงิน</button></div>');
       S = blank(sent);
       $('note').value = '';
       if (!d.repeat) R.gifts = R.gifts.concat(sent.gifts.map(function (g) { return { teacher: g.teacher, item: g.item, by: o.name, ts: o.ts }; }));
@@ -732,8 +850,12 @@ function send() {
   $('giftList').addEventListener('click', function (e) { var b = e.target.closest('button[data-i]'); if (!b) return; S.gifts.splice(Number(b.getAttribute('data-i')), 1); update(); renderTeacher(); });
   $('claimed').addEventListener('click', function (e) { var b = e.target.closest('button[data-t]'); if (!b) return; $('teacher').value = b.getAttribute('data-t'); renderTeacher(); $('teacher').scrollIntoView({ block: 'center', behavior: 'smooth' }); });
   $('review').addEventListener('click', review);
+  $('payFile').addEventListener('change', pickSlip);
+  $('payAmount').addEventListener('input', function () { P.amountTouched = true; payReady(); });
+  $('paySend').addEventListener('click', sendSlip);
   $('sheet').addEventListener('click', function (e) {
-    if (e.target === $('sheet') || e.target.closest('[data-close]') || e.target.id === 'again') closeSheet();
+    if (e.target.id === 'toPay') { closeSheet(); $('payCard').scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+    else if (e.target === $('sheet') || e.target.closest('[data-close]') || e.target.id === 'again') closeSheet();
     else if (e.target.id === 'send') send();
   });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });

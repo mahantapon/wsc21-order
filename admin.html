@@ -60,11 +60,21 @@ h2 { font-family: var(--f-display); font-size: 21px; margin: 0; line-height: 1.2
 label.field { display: grid; gap: 6px; font-weight: 600; }
 input[type=text], input[type=password], input[type=search] { width: 100%; border: 1.5px solid var(--line); background: var(--bg); border-radius: 10px; padding: 10px 12px; font-size: 16px; }
 .err { background: var(--bad-bg); border-radius: 10px; padding: 10px 12px; }
-.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .kpi { background: var(--surface); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); display: grid; gap: 2px; min-width: 0; }
 .kpi b { font-size: 12.5px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
 .kpi strong { font-family: var(--f-display); font-size: 26px; line-height: 1.15; }
 @media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ord.slip .id { color: var(--ok); }
+.sliptools { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; grid-column: 1 / -1; }
+.btn.okbtn { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.pill.wait { background: var(--chip); color: var(--muted); }
+.viewer { position: fixed; inset: 0; z-index: 40; background: rgba(10,14,35,.75); display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.viewer .box { background: var(--surface); border-radius: 14px; padding: 12px; max-width: 560px; width: 100%; max-height: 100%; overflow: auto; display: grid; gap: 10px; }
+.viewer .box .bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 700; }
+.viewer img { width: 100%; height: auto; border-radius: 8px; }
+select { font: inherit; color: inherit; border: 1.5px solid var(--line); background: var(--bg); border-radius: 10px; padding: 9px 10px; font-size: 15px; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
 .tablewrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
@@ -138,13 +148,18 @@ textarea.copybuf { position: fixed; left: -9999px; top: 0; }
 
       <section class="card">
         <div class="top"><h2>รายบ้าน (ตามอีเมล)</h2>
-          <input type="search" id="q" placeholder="ค้นหาชื่อ / อีเมล / เลขที่" style="max-width:280px"></div>
+          <div class="tools"><select id="f" aria-label="กรองสถานะการจ่าย"><option value="">ทุกบ้าน</option><option value="none">ยังไม่แนบสลิป</option><option value="part">จ่ายไม่ครบ</option><option value="wait">มีสลิปรอตรวจ</option><option value="done">จ่ายครบ ตรวจแล้ว</option></select>
+          <input type="search" id="q" placeholder="ค้นหาชื่อ / อีเมล / เลขที่" style="max-width:240px"></div></div>
         <div class="houses" id="houses"></div>
       </section>
     </div>
   </div>
 </main>
 <div class="toast" id="toast" hidden></div>
+<div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-labelledby="viewTitle">
+  <div class="box"><div class="bar"><span id="viewTitle"></span><button class="btn small" type="button" data-closeview>ปิด</button></div>
+    <p class="hint" id="viewMsg"></p><img id="viewImg" alt="รูปสลิปโอนเงิน" hidden></div>
+</div>
 
 <script>
 var API = 'https://script.google.com/macros/s/AKfycbzKnFJLyZAMiZ4j46yJvun-DkF8fx2AbNIkvEboz5PvzCaR3iLZCGfJU9PH9yimCbNhLQ/exec';
@@ -202,15 +217,27 @@ $('reload').addEventListener('click', function () { loadData().then(function () 
 /* ---------- render ---------- */
 function houses() {
   var map = {}, list = [];
+  function house(email) {
+    if (!map[email]) { map[email] = { email: email, names: [], contacts: [], orders: [], slips: [], total: 0, paid: 0, checked: 0 }; list.push(map[email]); }
+    return map[email];
+  }
   D.orders.forEach(function (o) {
-    if (!map[o.email]) { map[o.email] = { email: o.email, names: [], contacts: [], orders: [], total: 0 }; list.push(map[o.email]); }
-    var h = map[o.email];
+    var h = house(o.email);
     if (h.names.indexOf(o.name) < 0) h.names.push(o.name);
     if (o.contact && h.contacts.indexOf(o.contact) < 0) h.contacts.push(o.contact);
     h.orders.push(o); h.total += o.total || 0;
   });
+  (D.slips || []).forEach(function (x) {
+    var h = house(x.email);
+    if (!h.names.length) h.names.push(x.name || x.email);
+    h.slips.push(x); h.paid += Number(x.amount) || 0; if (x.checked) h.checked += Number(x.amount) || 0;
+  });
+  list.forEach(function (h) {
+    h.status = !h.slips.length ? 'none' : h.paid < h.total ? 'part' : h.slips.some(function (x) { return !x.checked; }) ? 'wait' : 'done';
+  });
   return list;
 }
+var STATUS = { none: ['ยังไม่แนบสลิป', 'wait'], part: ['จ่ายไม่ครบ', 'warn'], wait: ['มีสลิปรอตรวจ', 'fund'], done: ['จ่ายครบ ตรวจแล้ว', 'ok'] };
 function lines(o) {
   var P = D.prices, L = [];
   if (o.hoodFree) L.push(['Hood ของน้อง ไซส์ ' + o.hoodFree, 'ฟรี']);
@@ -229,6 +256,7 @@ function billText(h) {
   });
   t += 'รวม ' + h.total.toLocaleString('th-TH') + ' บาท';
   if (pending) t += ' (+ เสื้อยืดให้ครู ' + pending + ' ตัว คิดตามไซส์ที่ได้)';
+  if (h.paid) t += '\nแนบสลิปแล้ว ' + h.paid.toLocaleString('th-TH') + ' บาท · คงเหลือ ' + Math.max(0, h.total - h.paid).toLocaleString('th-TH') + ' บาท';
   return t;
 }
 function render() {
@@ -244,7 +272,10 @@ function render() {
     umb += o.umbrella || 0; pieces += o.umbrella || 0;
     (o.gifts || []).forEach(function (g) { if (g.item === 'hood') giftHood++; else giftTee++; pieces++; });
   });
-  $('kpis').innerHTML = [['บ้านที่สั่ง', H.length], ['คำสั่งซื้อ', O.length], ['ชิ้นทั้งหมด', pieces], ['ยอดเงินรวม', baht(money)]].map(function (k) {
+  var paid = 0, checked = 0, waiting = 0;
+  (D.slips || []).forEach(function (x) { var n = Number(x.amount) || 0; paid += n; if (x.checked) checked += n; else waiting++; });
+  $('kpis').innerHTML = [['บ้านที่สั่ง', H.filter(function (h) { return h.orders.length; }).length], ['ชิ้นทั้งหมด', pieces], ['ยอดสั่งรวม', baht(money)],
+    ['แนบสลิปแล้ว', baht(paid)], ['ตรวจแล้ว', baht(checked)], ['สลิปรอตรวจ', waiting + ' ใบ']].map(function (k) {
     return '<div class="kpi"><b>' + k[0] + '</b><strong class="num">' + k[1] + '</strong></div>';
   }).join('');
 
@@ -282,36 +313,73 @@ function render() {
   renderHouses(H);
 }
 function renderHouses(H) {
-  var q = $('q').value.trim().toLowerCase();
-  var list = H.filter(function (h) { return !q || (h.email + ' ' + h.names.join(' ') + ' ' + h.orders.map(function (o) { return o.id; }).join(' ')).toLowerCase().indexOf(q) >= 0; });
+  var q = $('q').value.trim().toLowerCase(), f = $('f').value;
+  var list = H.filter(function (h) {
+    if (f && h.status !== f) return false;
+    return !q || (h.email + ' ' + h.names.join(' ') + ' ' + h.orders.map(function (o) { return o.id; }).join(' ') + ' ' + h.slips.map(function (x) { return x.id; }).join(' ')).toLowerCase().indexOf(q) >= 0;
+  });
   $('houses').innerHTML = list.length ? list.map(function (h, i) {
-    var pend = h.orders.reduce(function (t, o) { return t + (o.giftTeePending || 0); }, 0);
-    return '<div class="house"><div class="hd"><div><div class="nm">' + esc(h.names.join(' / ')) + '</div><div class="em">' + esc(h.email) +
+    var pend = h.orders.reduce(function (t, o) { return t + (o.giftTeePending || 0); }, 0), st = STATUS[h.status];
+    return '<div class="house"><div class="hd"><div><div class="nm">' + esc(h.names.join(' / ')) + ' <span class="pill ' + st[1] + '">' + st[0] + '</span></div><div class="em">' + esc(h.email) +
       (h.contacts.length ? ' · ' + esc(h.contacts.join(', ')) : '') + '</div></div>' +
-      '<div class="amt num">' + baht(h.total) + (pend ? '<span class="hint"> + เสื้อยืดครู ' + pend + '</span>' : '') + '</div></div>' +
+      '<div class="amt num">' + baht(h.total) + (pend ? '<span class="hint"> + เสื้อยืดครู ' + pend + '</span>' : '') +
+      '<div class="hint num">จ่ายแล้ว ' + baht(h.paid) + ' · คงเหลือ ' + baht(Math.max(0, h.total - h.paid)) + '</div></div></div>' +
       h.orders.map(function (o) {
         return '<div class="ord"><span class="id">' + esc(o.id) + '</span><span class="items">' +
           esc(lines(o).map(function (l) { return l[0]; }).join(' · ')) + '<small>' + when(o.ts) + (o.note ? ' · หมายเหตุ: ' + esc(o.note) : '') + '</small></span>' +
           '<span class="t num">' + baht(o.total) + '</span><button class="btn small danger" type="button" data-del="' + esc(o.id) + '">ลบ</button></div>';
       }).join('') +
+      h.slips.map(function (x) {
+        return '<div class="ord slip"><span class="id">' + esc(x.id) + '</span><span class="items">สลิปโอน<small>' + when(x.ts) + '</small></span>' +
+          '<span class="t num">' + baht(Number(x.amount) || 0) + '</span><span class="sliptools">' +
+          '<button class="btn small" type="button" data-view="' + esc(x.id) + '">ดูสลิป</button>' +
+          '<button class="btn small ' + (x.checked ? 'okbtn' : '') + '" type="button" data-check="' + esc(x.id) + '" data-on="' + (x.checked ? 1 : 0) + '">' + (x.checked ? 'ตรวจแล้ว ✓' : 'กดยืนยันว่าตรวจแล้ว') + '</button>' +
+          '<button class="btn small danger" type="button" data-sdel="' + esc(x.id) + '">ลบ</button></span></div>';
+      }).join('') +
       '<div><button class="btn small" type="button" data-bill="' + i + '">คัดลอกข้อความแจ้งยอด</button></div></div>';
-  }).join('') : '<p class="hint">' + (q ? 'ไม่พบ' : 'ยังไม่มีคำสั่งซื้อ') + '</p>';
+  }).join('') : '<p class="hint">' + (q || f ? 'ไม่พบ' : 'ยังไม่มีคำสั่งซื้อ') + '</p>';
   $('houses').onclick = function (e) {
     var bill = e.target.closest('[data-bill]');
     if (bill) { copy(billText(list[Number(bill.getAttribute('data-bill'))])); return; }
-    var del = e.target.closest('[data-del]');
+    var view = e.target.closest('[data-view]');
+    if (view) { viewSlip(view.getAttribute('data-view')); return; }
+    var chk = e.target.closest('[data-check]');
+    if (chk) {
+      chk.disabled = true;
+      post({ action: 'slipcheck', token: token, id: chk.getAttribute('data-check'), checked: chk.getAttribute('data-on') !== '1' }, 'slip').then(function (d) {
+        if (!d.ok && d.error === 'AUTH') { logout(); throw new Error('หมดเวลาเข้าสู่ระบบ'); }
+        if (!d.ok) throw new Error(d.error);
+        D.slips.forEach(function (x) { if (x.id === d.slip.id) x.checked = d.slip.checked; });
+        render();
+      }).catch(function (err) { toast(err.message); chk.disabled = false; });
+      return;
+    }
+    var del = e.target.closest('[data-del],[data-sdel]');
     if (!del) return;
     if (!del.classList.contains('armed')) { del.classList.add('armed'); del.textContent = 'ยืนยันลบ'; setTimeout(function () { del.classList.remove('armed'); del.textContent = 'ลบ'; }, 4000); return; }
     del.disabled = true; del.textContent = 'กำลังลบ…';
-    var id = del.getAttribute('data-del');
-    post({ action: 'delete', token: token, id: id }).then(function (d) {
+    var slip = del.hasAttribute('data-sdel'), id = del.getAttribute(slip ? 'data-sdel' : 'data-del');
+    post({ action: slip ? 'slipdelete' : 'delete', token: token, id: id }).then(function (d) {
       if (!d.ok && d.error === 'AUTH') { logout(); throw new Error('หมดเวลาเข้าสู่ระบบ'); }
       toast(d.ok ? 'ลบ ' + id + ' แล้ว' : d.error);
       return loadData();
     }).catch(function (err) { toast(err.message); loadData().catch(function () {}); });
   };
 }
+function viewSlip(id) {
+  var x = (D.slips || []).filter(function (s) { return s.id === id; })[0];
+  $('viewTitle').textContent = id + (x ? ' · ' + (x.name || x.email) + ' · ' + baht(Number(x.amount) || 0) : '');
+  $('viewImg').hidden = true; $('viewMsg').hidden = false; $('viewMsg').textContent = 'กำลังโหลดรูป…';
+  $('viewer').hidden = false;
+  call(API + '?action=slip&token=' + encodeURIComponent(token) + '&id=' + encodeURIComponent(id), { cache: 'no-store' }, 'dataUrl').then(function (d) {
+    if (!d.ok) { if (d.error === 'AUTH') logout(); throw new Error(d.error); }
+    $('viewImg').src = d.dataUrl; $('viewImg').hidden = false; $('viewMsg').hidden = true;
+  }).catch(function (err) { $('viewMsg').textContent = 'โหลดรูปไม่ได้: ' + err.message; });
+}
+$('viewer').addEventListener('click', function (e) { if (e.target === $('viewer') || e.target.closest('[data-closeview]')) $('viewer').hidden = true; });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('viewer').hidden = true; });
 $('q').addEventListener('input', function () { if (D) renderHouses(houses()); });
+$('f').addEventListener('change', function () { if (D) renderHouses(houses()); });
 $('copyAll').addEventListener('click', function () {
   if (!D) return;
   var head = ['เลขที่', 'เวลา', 'ชื่อ', 'อีเมล', 'เบอร์/LINE', 'Hood ฟรี'].concat(D.hoodSizes.map(function (s) { return 'Hood ' + s; }), D.teeSizes.map(function (s) { return 'เสื้อยืด ' + s; }), ['ร่ม', 'ของขวัญครู', 'ยอด (บาท)', 'หมายเหตุ']);
@@ -320,7 +388,12 @@ $('copyAll').addEventListener('click', function () {
       D.hoodSizes.map(function (s) { return (o.hood || {})[s] || ''; }), D.teeSizes.map(function (s) { return (o.tee || {})[s] || ''; }),
       [o.umbrella || '', (o.gifts || []).map(function (g) { return itemName(g.item) + 'ให้' + g.teacher; }).join(', '), o.total, o.note || '']);
   });
-  copy([head].concat(rows).map(function (r) { return r.map(function (c) { return String(c).replace(/[\t\n]/g, ' '); }).join('\t'); }).join('\n'));
+  var all = [head].concat(rows);
+  if ((D.slips || []).length) {
+    all.push([], ['สลิป', 'เวลา', 'ชื่อ', 'อีเมล', 'ยอดโอน (บาท)', 'ตรวจแล้ว']);
+    D.slips.forEach(function (x) { all.push([x.id, when(x.ts), x.name || '', x.email, x.amount, x.checked ? 'ใช่' : '']); });
+  }
+  copy(all.map(function (r) { return r.map(function (c) { return String(c).replace(/[\t\n]/g, ' '); }).join('\t'); }).join('\n'));
 });
 
 token = ss('wsc21-token');
