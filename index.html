@@ -92,6 +92,13 @@ h1 .no { color: var(--sky); }
 .history ul { margin: 0; padding-left: 18px; }
 .history .sumline { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding-top: 6px; font-weight: 700; }
 .chip input:disabled + span { opacity: .4; cursor: not-allowed; }
+.qrbox { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 14px; align-items: center; background: var(--bg); border-radius: 14px; padding: 12px; }
+.qrbox a.qrimg { display: block; border-radius: 10px; overflow: hidden; background: #fff; }
+.qrbox img { width: 100%; height: auto; display: block; }
+.qrbox .qrtxt { display: grid; gap: 6px; min-width: 0; }
+.qrbox .qrtxt b { font-size: 16px; }
+.qrbox .qrtxt .btn { justify-self: start; text-decoration: none; display: inline-block; }
+@media (max-width: 460px) { .qrbox { grid-template-columns: 1fr; justify-items: center; } .qrbox a.qrimg { width: min(240px, 100%); } .qrbox .qrtxt { justify-items: center; text-align: center; } .qrbox .qrtxt .btn { justify-self: center; } }
 .paysum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .paysum div { background: var(--bg); border-radius: 10px; padding: 8px 10px; display: grid; min-width: 0; }
 .paysum b { font-size: 12px; color: var(--muted); font-weight: 600; }
@@ -287,11 +294,20 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
   </section>
 
   <section class="card" id="payCard" aria-labelledby="h-pay">
-    <h2 id="h-pay">แนบสลิปโอนเงิน</h2>
+    <h2 id="h-pay">โอนเงิน และแนบสลิป</h2>
+    <div class="qrbox">
+      <a class="qrimg" href="img/promptpay.png" target="_blank" rel="noopener" aria-label="เปิดรูป QR โอนเงินขนาดใหญ่"><img src="img/promptpay.png" width="885" height="1200" alt="Thai QR Payment PromptPay โอนเข้าบัญชี น.ส. พัชรินทร์ หทัยวิเชียร บัญชี xxx-x-x3528-x"></a>
+      <div class="qrtxt">
+        <b>สแกน QR เพื่อโอนเงิน</b>
+        <span>น.ส. พัชรินทร์ หทัยวิเชียร<br>บัญชี xxx-x-x3528-x</span>
+        <span class="hint">PromptPay รับเงินจากทุกธนาคาร · โอนตามยอดคงเหลือด้านล่าง แล้วแนบสลิปในช่องถัดไป</span>
+        <a class="btn ghost" href="img/promptpay.png" download="QR-โอนเงิน-NOlimit21.png">บันทึกรูป QR</a>
+      </div>
+    </div>
     <p class="hint" id="payLock">ใส่อีเมลที่สั่งไว้ในช่อง "ผู้สั่ง" ด้านบน หรือสั่งของให้เสร็จก่อน แล้วจะแนบสลิปได้ที่นี่</p>
     <div id="payBody" hidden class="paybody">
     <div class="paysum num" id="paySum"></div>
-    <p class="hint">โอนตามบัญชีที่กรรมการแจ้งในกลุ่ม แล้วแนบรูปสลิปที่นี่ กรรมการจะตรวจและยืนยันให้ · โอนหลายครั้งก็แนบได้หลายใบ</p>
+    <p class="hint">โอนผ่าน QR ด้านบนแล้วแนบรูปสลิปที่นี่ กรรมการจะตรวจและยืนยันให้ · โอนหลายครั้งก็แนบได้หลายใบ</p>
     <label class="field" for="payAmount"><span>ยอดที่โอน (บาท) <span class="req">*</span></span>
       <input type="text" id="payAmount" inputmode="decimal" autocomplete="off" placeholder="เช่น 685">
     </label>
@@ -688,7 +704,7 @@ function send() {
       H = { email: normEmail(sent.email), orders: d.orders || [o], slips: d.slips || H.slips || [], loading: false };
       openSheet('<div class="done"><div class="big">สั่งเรียบร้อยแล้ว</div></div><div>เลขที่คำสั่งซื้อ <span class="code">' + esc(o.id) + '</span></div>' +
         slipHTML(saved, c, true) + grandHTML(H.orders, 'ทั้งหมดของอีเมลนี้') +
-        '<p class="hint">แคปหน้าจอนี้เก็บไว้ได้ กรรมการจะสรุปยอดและแจ้งช่องทางชำระเงินให้ภายหลัง ต้องการแก้ไขแจ้งกรรมการพร้อมเลขที่คำสั่งซื้อ · สั่งเพิ่มได้ด้วยอีเมลเดิม</p>' +
+        '<p class="hint">กด "แนบสลิปโอนเงิน" เพื่อสแกน QR โอนเงินและแนบสลิป · แคปหน้าจอนี้เก็บไว้ได้ ต้องการแก้ไขแจ้งกรรมการพร้อมเลขที่คำสั่งซื้อ · สั่งเพิ่มได้ด้วยอีเมลเดิม</p>' +
         '<div class="actions"><button type="button" class="btn ghost" id="again">เสร็จสิ้น</button><button type="button" class="btn sunbtn" id="toPay">แนบสลิปโอนเงิน</button></div>');
       S = blank(sent);
       $('note').value = '';
