@@ -99,6 +99,8 @@ td.zero { color: var(--muted); opacity: .6; }
 .pill.warn { background: var(--sun); color: var(--sun-ink); }
 .pill.fund { background: var(--sky); color: #fff; }
 .pill.ok { background: var(--ok); color: var(--surface); }
+#tNames th, #tNames td { text-align: left; }
+#tNames td.nm { font-weight: 700; letter-spacing: .02em; }
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg);
   padding: 8px 16px; border-radius: 999px; font-weight: 600; z-index: 30; }
 textarea.copybuf { position: fixed; left: -9999px; top: 0; }
@@ -137,6 +139,12 @@ textarea.copybuf { position: fixed; left: -9999px; top: 0; }
           <div class="tablewrap"><table class="num" id="tTee"></table></div>
         </div>
         <div id="otherTotals"></div>
+      </section>
+
+      <section class="card">
+        <div class="top"><h2>ชื่อปักบนกระเป๋า Hood</h2><button class="btn small" id="copyNames" type="button">คัดลอกรายชื่อ</button></div>
+        <p class="hint">ไว้ส่งโรงงานปัก · เรียงตามไซส์ · ผู้ปกครองพิมพ์เป็นภาษาอังกฤษ</p>
+        <div class="tablewrap"><table class="num" id="tNames"></table></div>
       </section>
 
       <section class="card">
@@ -225,10 +233,23 @@ function houses() {
   return list;
 }
 var STATUS = { none: ['ยังไม่แนบสลิป', 'wait'], part: ['จ่ายไม่ครบ', 'warn'], wait: ['มีสลิปรอตรวจ', 'fund'], done: ['จ่ายครบ ตรวจแล้ว', 'ok'] };
+// one entry per hoodie (size + name + free?); orders saved before names existed are rebuilt from their counts
+function unitsOf(o) {
+  if (o.hoodUnits && o.hoodUnits.length) return o.hoodUnits;
+  var u = [];
+  if (o.hoodFree) u.push({ size: o.hoodFree, name: '', free: true });
+  D.hoodSizes.forEach(function (s) { for (var i = 0; i < ((o.hood || {})[s] || 0); i++) u.push({ size: s, name: '', free: false }); });
+  return u;
+}
+function allUnits() {
+  var list = [];
+  D.orders.forEach(function (o) { unitsOf(o).forEach(function (u) { list.push({ size: u.size, name: u.name || '', free: !!u.free, id: o.id, by: o.name }); }); });
+  list.sort(function (a, b) { return D.hoodSizes.indexOf(a.size) - D.hoodSizes.indexOf(b.size) || a.name.toLowerCase().localeCompare(b.name.toLowerCase()); });
+  return list;
+}
 function lines(o) {
   var P = D.prices, L = [];
-  if (o.hoodFree) L.push(['Hood ของน้อง ไซส์ ' + o.hoodFree, 'ฟรี']);
-  D.hoodSizes.forEach(function (s) { var n = (o.hood || {})[s]; if (n) L.push(['Hood ' + s + ' × ' + n, n * P.hood]); });
+  unitsOf(o).forEach(function (u) { L.push(['Hood ' + u.size + (u.name ? ' · ชื่อ ' + u.name : ' · (ไม่มีชื่อ)') + (u.free ? ' (ตัวฟรี)' : ''), u.free ? 'ฟรี' : P.hood]); });
   D.teeSizes.forEach(function (s) { var n = (o.tee || {})[s]; if (n) L.push(['เสื้อยืด ' + s + ' × ' + n, n * P.tee[s]]); });
   if (o.umbrella) L.push(['ร่ม × ' + o.umbrella, o.umbrella * P.umbrella]);
   return L;
@@ -275,6 +296,12 @@ function render() {
     return '<div class="kpi" style="box-shadow:none;background:var(--bg)"><b>' + k[0] + '</b><strong class="num" style="font-size:20px">' + k[1] + '</strong></div>';
   }).join('') + '</div>';
 
+  var U = allUnits();
+  $('tNames').innerHTML = '<thead><tr><th>#</th><th>ไซส์</th><th>ชื่อที่ปัก</th><th>ออเดอร์</th><th>ผู้สั่ง</th></tr></thead><tbody>' +
+    (U.length ? U.map(function (u, i) {
+      return '<tr><td>' + (i + 1) + '</td><td><b>' + esc(u.size) + '</b></td><td class="nm">' + (u.name ? esc(u.name) : '<span class="pill warn">ไม่มีชื่อ</span>') +
+        (u.free ? ' <span class="hint">ตัวฟรี</span>' : '') + '</td><td>' + esc(u.id) + '</td><td>' + esc(u.by) + '</td></tr>';
+    }).join('') : '<tr><td colspan="5" class="hint">ยังไม่มี Hood ที่สั่ง</td></tr>') + '</tbody>';
   renderHouses(H);
 }
 function renderHouses(H) {
@@ -345,13 +372,18 @@ $('viewer').addEventListener('click', function (e) { if (e.target === $('viewer'
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('viewer').hidden = true; });
 $('q').addEventListener('input', function () { if (D) renderHouses(houses()); });
 $('f').addEventListener('change', function () { if (D) renderHouses(houses()); });
+$('copyNames').addEventListener('click', function () {
+  if (!D) return;
+  var U = allUnits();
+  copy(['ไซส์\tชื่อที่ปัก\tเลขที่ออเดอร์\tผู้สั่ง'].concat(U.map(function (u) { return [u.size, u.name, u.id, u.by].map(function (c) { return String(c).replace(/[\t\n]/g, ' '); }).join('\t'); })).join('\n'));
+});
 $('copyAll').addEventListener('click', function () {
   if (!D) return;
-  var head = ['เลขที่', 'เวลา', 'ชื่อ', 'อีเมล', 'เบอร์/LINE', 'Hood ฟรี'].concat(D.hoodSizes.map(function (s) { return 'Hood ' + s; }), D.teeSizes.map(function (s) { return 'เสื้อยืด ' + s; }), ['ร่ม', 'ยอด (บาท)', 'หมายเหตุ']);
+  var head = ['เลขที่', 'เวลา', 'ชื่อ', 'อีเมล', 'เบอร์/LINE', 'Hood ฟรี'].concat(D.hoodSizes.map(function (s) { return 'Hood ' + s; }), D.teeSizes.map(function (s) { return 'เสื้อยืด ' + s; }), ['ร่ม', 'ยอด (บาท)', 'หมายเหตุ', 'ชื่อปัก Hood']);
   var rows = D.orders.map(function (o) {
     return [o.id, when(o.ts), o.name, o.email, o.contact || '', o.hoodFree || ''].concat(
       D.hoodSizes.map(function (s) { return (o.hood || {})[s] || ''; }), D.teeSizes.map(function (s) { return (o.tee || {})[s] || ''; }),
-      [o.umbrella || '', o.total, o.note || '']);
+      [o.umbrella || '', o.total, o.note || '', unitsOf(o).map(function (u) { return u.size + ':' + (u.name || '-'); }).join('; ')]);
   });
   var all = [head].concat(rows);
   if ((D.slips || []).length) {

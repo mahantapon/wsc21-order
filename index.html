@@ -117,6 +117,14 @@ h1 .no { color: var(--sky); }
 .okmsg { background: var(--ok-bg); border-radius: 10px; padding: 10px 12px; font-size: 14.5px; }
 .pill.wait { background: var(--chip); color: var(--muted); }
 .freeused { font-size: 13.5px; background: var(--ok-bg); border-radius: 10px; padding: 8px 12px; }
+.hoodnames { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; }
+.nameRows { display: grid; gap: 10px; }
+.nameRow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 8px; align-items: start; }
+.nameRow .lab { font-size: 14.5px; line-height: 1.4; padding-top: 10px; }
+.nameRow .lab b { font-weight: 700; }
+.nameRow input.bad { border-color: var(--coral); }
+.nameerr { color: var(--coral); font-size: 12.5px; min-height: 0; }
+@media (max-width: 420px) { .nameRow { grid-template-columns: 1fr; gap: 4px; } .nameRow .lab { padding-top: 0; } }
 
 /* cards */
 .card { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 18px 16px; display: grid; gap: 14px; min-width: 0; }
@@ -270,6 +278,11 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
 
     <div class="freeused" id="hoodNote"></div>
     <div class="rows" id="hoodRows"></div>
+    <div class="hoodnames" id="hoodNames" hidden>
+      <h3>ชื่อที่ปักบนกระเป๋า Hood <span class="sub">พิมพ์เป็นภาษาอังกฤษ</span></h3>
+      <p class="hint">ใส่ชื่อเด็กที่จะให้ปักตรงกระเป๋า เรียงตามแต่ละตัวที่สั่ง ตรงกับไซส์ของตัวนั้น เช่น BEE · ใช้ตัวอักษร A-Z ตัวเลข เว้นวรรคได้ ไม่เกิน 20 ตัว</p>
+      <div class="nameRows" id="hoodNameRows"></div>
+    </div>
   </section>
 
   <section class="card" aria-labelledby="h-tee">
@@ -351,12 +364,16 @@ var TEE = [ // size, chest, price
 ];
 var TEE_PRICE = {}; TEE.forEach(function (t) { TEE_PRICE[t[0]] = t[2]; });
 var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+var NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 .'\-]{0,19}$/;   // ชื่อปัก: อังกฤษ ไม่เกิน 20 ตัว (ตรงกับหลังบ้าน)
+var THAI_RE = /[\u0E00-\u0E7F]/;
 
-function blank(keep) { return { name: keep ? keep.name : '', email: keep ? keep.email : '', contact: keep ? keep.contact : '', hoodFirst: '', hood: {}, tee: {}, umbrella: 0, note: '' }; }
+function blank(keep) { return { name: keep ? keep.name : '', email: keep ? keep.email : '', contact: keep ? keep.contact : '', hoodFirst: '', hood: {}, tee: {}, umbrella: 0, hoodNames: {}, note: '' }; }
 var S = blank();
 var R = { orderers: [], closed: Date.now() > CLOSE_AT.getTime(), loaded: false };
 var H = { email: '', orders: [], slips: [], loading: false }; // this parent's earlier orders and slips
 var P = { image: '', amountTouched: false, cid: '' }; // slip being attached
+var hoodSig = '';          // which hood lines are on screen (the name inputs are rebuilt only when this changes)
+var pendingFocus = false;  // jump to the first missing hood name after closing the review sheet
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -445,17 +462,26 @@ function merge(list) {
   var m = blank();
   list.forEach(function (o) {
     if (o.hoodFree) m.hoodFree = o.hoodFree;
+    m.hoodUnits = (m.hoodUnits || []).concat(unitsOf(o));
     Object.keys(o.hood || {}).forEach(function (k) { m.hood[k] = (m.hood[k] || 0) + o.hood[k]; });
     Object.keys(o.tee || {}).forEach(function (k) { m.tee[k] = (m.tee[k] || 0) + o.tee[k]; });
     m.umbrella += o.umbrella || 0;
   });
   return m;
 }
+// one entry per hoodie (size + name + free?) — orders saved before names existed are rebuilt from their counts
+function unitsOf(o) {
+  if (o.hoodUnits && o.hoodUnits.length) return o.hoodUnits;
+  var u = [];
+  if (o.hoodFree) u.push({ size: o.hoodFree, name: '', free: true });
+  HOOD.forEach(function (r) { for (var i = 0; i < ((o.hood || {})[r[0]] || 0); i++) u.push({ size: r[0], name: '', free: false }); });
+  return u;
+}
+function unitText(u) { return u.size + (u.name ? ' (' + u.name + ')' : '') + (u.free ? ' ฟรี' : ''); }
 function itemsText(o) {
   var parts = [];
-  if (o.hoodFree) parts.push('Hood ฟรี ' + o.hoodFree);
-  var h = HOOD.filter(function (r) { return o.hood[r[0]]; }).map(function (r) { return r[0] + '×' + o.hood[r[0]]; });
-  if (h.length) parts.push('Hood ' + h.join(', '));
+  var hu = unitsOf(o);
+  if (hu.length) parts.push('Hood ' + hu.map(unitText).join(', '));
   var t = TEE.filter(function (r) { return o.tee[r[0]]; }).map(function (r) { return r[0] + '×' + o.tee[r[0]]; });
   if (t.length) parts.push('เสื้อยืด ' + t.join(', '));
   if (o.umbrella) parts.push('ร่ม ' + o.umbrella);
@@ -477,10 +503,42 @@ function freeSize(o) {
   var r = HOOD.filter(function (x) { return o.hood[x[0]]; })[0];
   return r ? r[0] : '';
 }
+// every hoodie on the form as its own line: the free one first, then the rest by size; names come from o.hoodNames[size][index]
+function hoodUnits(o) {
+  var f = freeSize(o), units = [];
+  if (f) units.push({ size: f, idx: 0, free: true });
+  HOOD.forEach(function (r) { for (var i = (r[0] === f ? 1 : 0); i < ((o.hood || {})[r[0]] || 0); i++) units.push({ size: r[0], idx: i, free: false }); });
+  return units.map(function (u) { u.name = String(((o.hoodNames || {})[u.size] || [])[u.idx] || '').trim(); return u; });
+}
 function priced(o) {
   var f = freeSize(o), extra = {};
   Object.keys(o.hood || {}).forEach(function (k) { var n = o.hood[k] - (k === f ? 1 : 0); if (n > 0) extra[k] = n; });
-  return { name: o.name, email: o.email, contact: o.contact, note: o.note, hoodFree: f, hood: extra, tee: o.tee, umbrella: o.umbrella };
+  return { name: o.name, email: o.email, contact: o.contact, note: o.note, hoodFree: f, hood: extra, tee: o.tee, umbrella: o.umbrella, hoodUnits: hoodUnits(o) };
+}
+function nameProblem(v) { return !v ? 'ใส่ชื่อ' : THAI_RE.test(v) ? 'พิมพ์เป็นภาษาอังกฤษเท่านั้น' : !NAME_RE.test(v) ? 'ใช้ตัวอักษร A-Z ตัวเลข เว้นวรรค . - ไม่เกิน 20 ตัว' : ''; }
+function checkNameInput(el) {
+  var v = el.value.trim(), bad = v && nameProblem(v);
+  el.classList.toggle('bad', !!bad);
+  var m = el.parentNode.querySelector('.nameerr'); if (m) m.textContent = bad || '';
+}
+// the name inputs are rebuilt only when the list of hoodies changes, so typing never loses focus
+function renderHoodNames() {
+  var units = hoodUnits(S), box = $('hoodNames');
+  box.hidden = !units.length;
+  var sig = units.map(function (u) { return u.size + '#' + u.idx + (u.free ? 'f' : ''); }).join('|');
+  if (sig === hoodSig) return;
+  hoodSig = sig;
+  $('hoodNameRows').innerHTML = units.map(function (u, k) {
+    var id = 'hn-' + k;
+    return '<div class="nameRow"><label class="lab" for="' + id + '"><b>' + (u.free ? 'ตัวฟรี' : 'ตัวที่ ' + (k + 1)) + '</b> · ไซส์ ' + esc(u.size) +
+      (u.free ? '' : ' <span class="hint">· 290 ฿</span>') + '</label><div><input type="text" id="' + id + '" lang="en" maxlength="20" autocomplete="off" autocapitalize="words" ' +
+      'placeholder="ชื่อภาษาอังกฤษ เช่น BEE" data-size="' + esc(u.size) + '" data-i="' + u.idx + '" value="' + esc(u.name) + '"><div class="nameerr" aria-live="polite"></div></div></div>';
+  }).join('');
+  $('hoodNameRows').querySelectorAll('input').forEach(checkNameInput);
+}
+function focusNameIssue() {
+  var el = [].slice.call($('hoodNameRows').querySelectorAll('input')).filter(function (i) { return nameProblem(i.value.trim()); })[0];
+  if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus({ preventScroll: true }); }
 }
 function update() {
   var used = freeUsedBy(), f = freeSize(S);
@@ -500,6 +558,7 @@ function update() {
   $('barItems').textContent = bits.length ? bits.join(' · ') : (H.orders.length ? 'สั่งเพิ่มได้ เลือกสินค้าด้านบน' : 'ยังไม่ได้เลือกสินค้า');
   $('barTotal').textContent = baht(c.total);
   $('review').disabled = R.closed;
+  renderHoodNames();
   store('wsc21-draft', S);
 }
 
@@ -645,8 +704,7 @@ function renderClosing() {
 /* ---------- review & submit ---------- */
 function slipHTML(o, c, withWho) {
   var L = [];
-  if (o.hoodFree) L.push(['Hood ' + o.hoodFree + ' × 1 (ตัวฟรี)', 'ฟรี']);
-  HOOD.forEach(function (r) { var n = o.hood[r[0]]; if (n) L.push(['Hood ' + r[0] + ' × ' + n, baht(n * HOOD_PRICE)]); });
+  unitsOf(o).forEach(function (u) { L.push(['Hood ' + u.size + (u.name ? ' · ชื่อ ' + u.name : '') + (u.free ? ' (ตัวฟรี)' : ''), u.free ? 'ฟรี' : baht(HOOD_PRICE)]); });
   TEE.forEach(function (r) { var n = o.tee[r[0]]; if (n) L.push(['เสื้อยืด ' + r[0] + ' × ' + n, baht(n * r[2])]); });
   if (o.umbrella) L.push(['ร่ม × ' + o.umbrella, baht(o.umbrella * UMB_PRICE)]);
   var h = '<div class="slip num">' + (withWho ? '<div class="who">' + esc(o.name) + ' · ' + esc(normEmail(o.email)) + (o.contact ? ' · ' + esc(o.contact) : '') + '</div>' : '') +
@@ -670,12 +728,17 @@ function review() {
   if (!S.name) errs.push('กรอกชื่อผู้สั่ง');
   if (!EMAIL_RE.test(normEmail(S.email))) errs.push('กรอกอีเมลผู้ปกครองให้ถูกต้อง');
   if (!c.any) errs.push('เลือกสินค้าอย่างน้อย 1 รายการ');
+  var noName = v.hoodUnits.filter(function (u) { return !u.name; }).length;
+  var badName = v.hoodUnits.filter(function (u) { return u.name && nameProblem(u.name); });
+  if (noName) errs.push('ใส่ชื่อที่จะปักบนกระเป๋า Hood ให้ครบทุกตัว (ยังขาด ' + noName + ' ตัว)');
+  if (badName.length) errs.push('ชื่อที่ปักต้องเป็นภาษาอังกฤษ (A-Z) ไม่เกิน 20 ตัว: ' + badName.map(function (u) { return u.name; }).join(', '));
+  if (noName || badName.length) pendingFocus = true;
   if (errs.length) {
     openSheet('<h2 id="sheetTitle">ยังขาดข้อมูล</h2><div class="err">' + errs.join('<br>') + '</div><button type="button" class="btn primary" data-close>กลับไปแก้</button>');
     return;
   }
   var mine = H.email === normEmail(S.email) ? H.orders : [];
-  var after = mine.concat([{ hoodFree: v.hoodFree, hood: v.hood, tee: v.tee, umbrella: v.umbrella, total: c.total }]);
+  var after = mine.concat([{ hoodFree: v.hoodFree, hood: v.hood, hoodUnits: v.hoodUnits, tee: v.tee, umbrella: v.umbrella, total: c.total }]);
   openSheet('<h2 id="sheetTitle">ตรวจสอบรายการ</h2>' + slipHTML(v, c, true) +
     (mine.length ? grandHTML(after, 'รวมกับที่เคยสั่งไว้') : '') +
     '<div class="err" id="sendErr" hidden></div>' +
@@ -697,10 +760,12 @@ function send() {
   var btn = $('send'); btn.disabled = true; btn.textContent = 'กำลังส่ง…';
   if (!S.cid) S.cid = newCid();
   var sent = JSON.parse(JSON.stringify(S));
+  sent.hoodNames = {};
+  hoodUnits(S).forEach(function (u) { (sent.hoodNames[u.size] = sent.hoodNames[u.size] || [])[u.idx] = u.name; });
   postOrder(sent, 2)
     .then(function (d) {
       if (!d || !d.ok) throw new Error((d && d.error) || 'ส่งไม่สำเร็จ');
-      var o = d.order, saved = { name: o.name, email: sent.email, contact: sent.contact, note: o.note, hoodFree: o.hoodFree, hood: o.hood, tee: o.tee, umbrella: o.umbrella }, c = calc(saved);
+      var o = d.order, saved = { name: o.name, email: sent.email, contact: sent.contact, note: o.note, hoodFree: o.hoodFree, hood: o.hood, hoodUnits: o.hoodUnits, tee: o.tee, umbrella: o.umbrella }, c = calc(saved);
       H = { email: normEmail(sent.email), orders: d.orders || [o], slips: d.slips || H.slips || [], loading: false };
       openSheet('<div class="done"><div class="big">สั่งเรียบร้อยแล้ว</div></div><div>เลขที่คำสั่งซื้อ <span class="code">' + esc(o.id) + '</span></div>' +
         slipHTML(saved, c, true) + grandHTML(H.orders, 'ทั้งหมดของอีเมลนี้') +
@@ -722,7 +787,7 @@ function send() {
   var d = load('wsc21-draft');
   if (d && typeof d === 'object') {
     S = blank(d); S.note = d.note || ''; S.hoodFirst = d.hoodFirst || d.hoodFree || '';
-    S.hood = d.hood || {}; S.tee = d.tee || {}; S.umbrella = d.umbrella || 0; S.cid = d.cid || '';
+    S.hood = d.hood || {}; S.hoodNames = d.hoodNames || {}; S.tee = d.tee || {}; S.umbrella = d.umbrella || 0; S.cid = d.cid || '';
     if (d.hoodFree) S.hood[d.hoodFree] = (S.hood[d.hoodFree] || 0) + 1;
   }
   $('name').value = S.name; $('email').value = S.email; $('contact').value = S.contact; $('note').value = S.note;
@@ -733,6 +798,12 @@ function send() {
   $('email').addEventListener('blur', function () { clearTimeout(emailTimer); lookupEmail(); });
   $('contact').addEventListener('input', function () { S.contact = this.value; store('wsc21-draft', S); });
   $('note').addEventListener('input', function () { S.note = this.value; store('wsc21-draft', S); });
+  $('hoodNameRows').addEventListener('input', function (e) {
+    var el = e.target; if (!el.matches('input[data-size]')) return;
+    var size = el.getAttribute('data-size'), i = Number(el.getAttribute('data-i'));
+    (S.hoodNames[size] = S.hoodNames[size] || [])[i] = el.value;
+    checkNameInput(el); store('wsc21-draft', S);
+  });
   $('review').addEventListener('click', review);
   $('payFile').addEventListener('change', pickSlip);
   $('payAmount').addEventListener('input', function () { P.amountTouched = true; payReady(); });
@@ -740,7 +811,10 @@ function send() {
   $('history').addEventListener('click', function (e) { if (e.target.id === 'goPay') $('payCard').scrollIntoView({ block: 'start', behavior: 'smooth' }); });
   $('sheet').addEventListener('click', function (e) {
     if (e.target.id === 'toPay') { closeSheet(); $('payCard').scrollIntoView({ block: 'start', behavior: 'smooth' }); }
-    else if (e.target === $('sheet') || e.target.closest('[data-close]') || e.target.id === 'again') closeSheet();
+    else if (e.target === $('sheet') || e.target.closest('[data-close]') || e.target.id === 'again') {
+      closeSheet();
+      if (pendingFocus) { pendingFocus = false; focusNameIssue(); }
+    }
     else if (e.target.id === 'send') send();
   });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
