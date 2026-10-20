@@ -279,8 +279,8 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     <div class="freeused" id="hoodNote"></div>
     <div class="rows" id="hoodRows"></div>
     <div class="hoodnames" id="hoodNames" hidden>
-      <h3>ชื่อที่ปักบนกระเป๋า Hood <span class="sub">พิมพ์เป็นภาษาอังกฤษ</span></h3>
-      <p class="hint">ใส่ชื่อเด็กที่จะให้ปักตรงกระเป๋า เรียงตามแต่ละตัวที่สั่ง ตรงกับไซส์ของตัวนั้น เช่น BEE · ใช้ตัวอักษร A-Z ตัวเลข เว้นวรรคได้ ไม่เกิน 20 ตัว</p>
+      <h3>ชื่อที่สกรีนบนกระเป๋า Hood <span class="sub">พิมพ์เป็นภาษาอังกฤษ</span></h3>
+      <p class="hint">ใส่ชื่อเด็กที่จะให้สกรีนตรงกระเป๋า เรียงตามแต่ละตัวที่สั่ง ตรงกับไซส์ของตัวนั้น พิมพ์เฉพาะชื่อเป็นภาษาอังกฤษ (A-Z) เช่น BEE · ไม่ต้องมีตัวเลขหรือตัวพิเศษ</p>
       <div class="nameRows" id="hoodNameRows"></div>
     </div>
   </section>
@@ -364,7 +364,8 @@ var TEE = [ // size, chest, price
 ];
 var TEE_PRICE = {}; TEE.forEach(function (t) { TEE_PRICE[t[0]] = t[2]; });
 var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-var NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 .'\-]{0,19}$/;   // ชื่อปัก: อังกฤษ ไม่เกิน 20 ตัว (ตรงกับหลังบ้าน)
+var NAME_RE = /^[A-Za-z]+(?: [A-Za-z]+)*$/;   // ชื่อสกรีน: A-Z ล้วน เว้นวรรคระหว่างคำได้ ไม่มีตัวเลข/ตัวพิเศษ (ตรงกับหลังบ้าน)
+var NAME_MAX = 60;                             // ไม่จำกัดตามโจทย์ แค่กันข้อความขยะ
 var THAI_RE = /[\u0E00-\u0E7F]/;
 
 function blank(keep) { return { name: keep ? keep.name : '', email: keep ? keep.email : '', contact: keep ? keep.contact : '', hoodFirst: '', hood: {}, tee: {}, umbrella: 0, hoodNames: {}, note: '' }; }
@@ -508,16 +509,16 @@ function hoodUnits(o) {
   var f = freeSize(o), units = [];
   if (f) units.push({ size: f, idx: 0, free: true });
   HOOD.forEach(function (r) { for (var i = (r[0] === f ? 1 : 0); i < ((o.hood || {})[r[0]] || 0); i++) units.push({ size: r[0], idx: i, free: false }); });
-  return units.map(function (u) { u.name = String(((o.hoodNames || {})[u.size] || [])[u.idx] || '').trim(); return u; });
+  return units.map(function (u) { u.name = String(((o.hoodNames || {})[u.size] || [])[u.idx] || '').replace(/\s+/g, ' ').trim(); return u; });
 }
 function priced(o) {
   var f = freeSize(o), extra = {};
   Object.keys(o.hood || {}).forEach(function (k) { var n = o.hood[k] - (k === f ? 1 : 0); if (n > 0) extra[k] = n; });
   return { name: o.name, email: o.email, contact: o.contact, note: o.note, hoodFree: f, hood: extra, tee: o.tee, umbrella: o.umbrella, hoodUnits: hoodUnits(o) };
 }
-function nameProblem(v) { return !v ? 'ใส่ชื่อ' : THAI_RE.test(v) ? 'พิมพ์เป็นภาษาอังกฤษเท่านั้น' : !NAME_RE.test(v) ? 'ใช้ตัวอักษร A-Z ตัวเลข เว้นวรรค . - ไม่เกิน 20 ตัว' : ''; }
+function nameProblem(v) { return !v ? 'ใส่ชื่อ' : THAI_RE.test(v) ? 'พิมพ์เป็นภาษาอังกฤษเท่านั้น' : !NAME_RE.test(v) ? 'ใช้ตัวอักษร A-Z เท่านั้น ไม่ต้องมีตัวเลขหรือตัวพิเศษ' : v.length > NAME_MAX ? 'ชื่อยาวเกินไป' : ''; }
 function checkNameInput(el) {
-  var v = el.value.trim(), bad = v && nameProblem(v);
+  var v = el.value.replace(/\s+/g, ' ').trim(), bad = v && nameProblem(v);
   el.classList.toggle('bad', !!bad);
   var m = el.parentNode.querySelector('.nameerr'); if (m) m.textContent = bad || '';
 }
@@ -531,13 +532,13 @@ function renderHoodNames() {
   $('hoodNameRows').innerHTML = units.map(function (u, k) {
     var id = 'hn-' + k;
     return '<div class="nameRow"><label class="lab" for="' + id + '"><b>' + (u.free ? 'ตัวฟรี' : 'ตัวที่ ' + (k + 1)) + '</b> · ไซส์ ' + esc(u.size) +
-      (u.free ? '' : ' <span class="hint">· 290 ฿</span>') + '</label><div><input type="text" id="' + id + '" lang="en" maxlength="20" autocomplete="off" autocapitalize="words" ' +
+      (u.free ? '' : ' <span class="hint">· 290 ฿</span>') + '</label><div><input type="text" id="' + id + '" lang="en" maxlength="60" autocomplete="off" autocapitalize="words" ' +
       'placeholder="ชื่อภาษาอังกฤษ เช่น BEE" data-size="' + esc(u.size) + '" data-i="' + u.idx + '" value="' + esc(u.name) + '"><div class="nameerr" aria-live="polite"></div></div></div>';
   }).join('');
   $('hoodNameRows').querySelectorAll('input').forEach(checkNameInput);
 }
 function focusNameIssue() {
-  var el = [].slice.call($('hoodNameRows').querySelectorAll('input')).filter(function (i) { return nameProblem(i.value.trim()); })[0];
+  var el = [].slice.call($('hoodNameRows').querySelectorAll('input')).filter(function (i) { return nameProblem(i.value.replace(/\s+/g, ' ').trim()); })[0];
   if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus({ preventScroll: true }); }
 }
 function update() {
@@ -730,8 +731,8 @@ function review() {
   if (!c.any) errs.push('เลือกสินค้าอย่างน้อย 1 รายการ');
   var noName = v.hoodUnits.filter(function (u) { return !u.name; }).length;
   var badName = v.hoodUnits.filter(function (u) { return u.name && nameProblem(u.name); });
-  if (noName) errs.push('ใส่ชื่อที่จะปักบนกระเป๋า Hood ให้ครบทุกตัว (ยังขาด ' + noName + ' ตัว)');
-  if (badName.length) errs.push('ชื่อที่ปักต้องเป็นภาษาอังกฤษ (A-Z) ไม่เกิน 20 ตัว: ' + badName.map(function (u) { return u.name; }).join(', '));
+  if (noName) errs.push('ใส่ชื่อที่จะสกรีนบนกระเป๋า Hood ให้ครบทุกตัว (ยังขาด ' + noName + ' ตัว)');
+  if (badName.length) errs.push('ชื่อที่สกรีนต้องเป็นภาษาอังกฤษ A-Z เท่านั้น ไม่มีตัวเลขหรือตัวพิเศษ: ' + badName.map(function (u) { return u.name; }).join(', '));
   if (noName || badName.length) pendingFocus = true;
   if (errs.length) {
     openSheet('<h2 id="sheetTitle">ยังขาดข้อมูล</h2><div class="err">' + errs.join('<br>') + '</div><button type="button" class="btn primary" data-close>กลับไปแก้</button>');

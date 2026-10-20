@@ -142,8 +142,8 @@ textarea.copybuf { position: fixed; left: -9999px; top: 0; }
       </section>
 
       <section class="card">
-        <div class="top"><h2>ชื่อปักบนกระเป๋า Hood</h2><button class="btn small" id="copyNames" type="button">คัดลอกรายชื่อ</button></div>
-        <p class="hint">ไว้ส่งโรงงานปัก · เรียงตามไซส์ · ผู้ปกครองพิมพ์เป็นภาษาอังกฤษ</p>
+        <div class="top"><h2>ชื่อสกรีนบนกระเป๋า Hood</h2><button class="btn small" id="copyNames" type="button">คัดลอกรายชื่อ</button></div>
+        <p class="hint">ไว้ส่งโรงงานสกรีน · เรียงตามไซส์ · ผู้ปกครองพิมพ์เป็นภาษาอังกฤษ</p>
         <div class="tablewrap"><table class="num" id="tNames"></table></div>
       </section>
 
@@ -297,7 +297,7 @@ function render() {
   }).join('') + '</div>';
 
   var U = allUnits();
-  $('tNames').innerHTML = '<thead><tr><th>#</th><th>ไซส์</th><th>ชื่อที่ปัก</th><th>ออเดอร์</th><th>ผู้สั่ง</th></tr></thead><tbody>' +
+  $('tNames').innerHTML = '<thead><tr><th>#</th><th>ไซส์</th><th>ชื่อที่สกรีน</th><th>ออเดอร์</th><th>ผู้สั่ง</th></tr></thead><tbody>' +
     (U.length ? U.map(function (u, i) {
       return '<tr><td>' + (i + 1) + '</td><td><b>' + esc(u.size) + '</b></td><td class="nm">' + (u.name ? esc(u.name) : '<span class="pill warn">ไม่มีชื่อ</span>') +
         (u.free ? ' <span class="hint">ตัวฟรี</span>' : '') + '</td><td>' + esc(u.id) + '</td><td>' + esc(u.by) + '</td></tr>';
@@ -375,11 +375,11 @@ $('f').addEventListener('change', function () { if (D) renderHouses(houses()); }
 $('copyNames').addEventListener('click', function () {
   if (!D) return;
   var U = allUnits();
-  copy(['ไซส์\tชื่อที่ปัก\tเลขที่ออเดอร์\tผู้สั่ง'].concat(U.map(function (u) { return [u.size, u.name, u.id, u.by].map(function (c) { return String(c).replace(/[\t\n]/g, ' '); }).join('\t'); })).join('\n'));
+  copy(['ไซส์\tชื่อที่สกรีน\tเลขที่ออเดอร์\tผู้สั่ง'].concat(U.map(function (u) { return [u.size, u.name, u.id, u.by].map(function (c) { return String(c).replace(/[\t\n]/g, ' '); }).join('\t'); })).join('\n'));
 });
 $('copyAll').addEventListener('click', function () {
   if (!D) return;
-  var head = ['เลขที่', 'เวลา', 'ชื่อ', 'อีเมล', 'เบอร์/LINE', 'Hood ฟรี'].concat(D.hoodSizes.map(function (s) { return 'Hood ' + s; }), D.teeSizes.map(function (s) { return 'เสื้อยืด ' + s; }), ['ร่ม', 'ยอด (บาท)', 'หมายเหตุ', 'ชื่อปัก Hood']);
+  var head = ['เลขที่', 'เวลา', 'ชื่อ', 'อีเมล', 'เบอร์/LINE', 'Hood ฟรี'].concat(D.hoodSizes.map(function (s) { return 'Hood ' + s; }), D.teeSizes.map(function (s) { return 'เสื้อยืด ' + s; }), ['ร่ม', 'ยอด (บาท)', 'หมายเหตุ', 'ชื่อสกรีน Hood']);
   var rows = D.orders.map(function (o) {
     return [o.id, when(o.ts), o.name, o.email, o.contact || '', o.hoodFree || ''].concat(
       D.hoodSizes.map(function (s) { return (o.hood || {})[s] || ''; }), D.teeSizes.map(function (s) { return (o.tee || {})[s] || ''; }),
