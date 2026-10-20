@@ -105,6 +105,7 @@ h1 .no { color: var(--sky); }
 .filepick:focus-within { outline: 3px solid var(--sky); outline-offset: 2px; }
 .slipprev { max-height: 280px; width: auto; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); justify-self: start; }
 .slips { display: grid; gap: 6px; }
+.paybody { display: grid; gap: 14px; }
 .sliprow { display: flex; justify-content: space-between; align-items: center; gap: 6px 10px; flex-wrap: wrap; background: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
 .okmsg { background: var(--ok-bg); border-radius: 10px; padding: 10px 12px; font-size: 14.5px; }
 .pill.wait { background: var(--chip); color: var(--muted); }
@@ -237,7 +238,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     <div class="eyebrow">#wsc รุ่น 21 · <span class="no">NO</span> limit</div>
     <h1>สั่งเสื้อ Hood · เสื้อยืด · ร่ม</h1>
     <div class="closing num" id="closing">ปิดรับ 30 ต.ค. 69</div>
-    <p class="lede">ราคาทั้งหมดเป็นราคา net จาก supplier ไม่บวกเพิ่ม ไม่มีกำไร · กดเลือกจำนวนแล้วระบบรวมยอดให้เลย กรรมการจะสรุปยอดแจ้งแต่ละบ้านเพื่อชำระเงินภายหลัง</p>
+    <p class="lede">ราคาทั้งหมดเป็นราคา net จาก supplier ไม่บวกเพิ่ม ไม่มีกำไร · กดเลือกจำนวนแล้วระบบรวมยอดให้เลย</p>
   </header>
 
   <div class="tags">
@@ -260,25 +261,6 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     <label class="field" for="contact"><span>เบอร์โทร / LINE ID <span class="hint" style="font-weight:400">(ไม่บังคับ)</span></span>
       <input type="text" id="contact" autocomplete="off" placeholder="เช่น 081-234-5678 หรือ LINE: mom_bee">
     </label>
-  </section>
-
-  <section class="card" id="payCard" aria-labelledby="h-pay" hidden>
-    <h2 id="h-pay">แนบสลิปโอนเงิน</h2>
-    <div class="paysum num" id="paySum"></div>
-    <p class="hint">โอนตามบัญชีที่กรรมการแจ้งในกลุ่ม แล้วแนบรูปสลิปที่นี่ กรรมการจะตรวจและยืนยันให้ · โอนหลายครั้งก็แนบได้หลายใบ</p>
-    <label class="field" for="payAmount"><span>ยอดที่โอน (บาท) <span class="req">*</span></span>
-      <input type="text" id="payAmount" inputmode="decimal" autocomplete="off" placeholder="เช่น 685">
-    </label>
-    <label class="filepick" for="payFile">
-      <input type="file" id="payFile" accept="image/*">
-      <span id="payPickText">+ เลือกรูปสลิป</span>
-      <small>ภาพหน้าจอจากแอปธนาคาร หรือถ่ายรูปสลิป</small>
-    </label>
-    <img id="payPreview" class="slipprev" alt="สลิปที่เลือก" hidden>
-    <div class="err" id="payErr" hidden></div>
-    <div class="okmsg" id="payOk" hidden></div>
-    <button type="button" class="btn sunbtn" id="paySend" disabled>ส่งสลิป</button>
-    <div class="slips" id="paySlips"></div>
   </section>
 
   <section class="card" aria-labelledby="h-hood">
@@ -339,6 +321,28 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     <label class="field" for="note"><span class="hint" style="font-weight:400">ไม่บังคับ เช่น ต้องการมากกว่า 5 ตัว หรือรายละเอียดอื่น</span>
       <textarea id="note"></textarea>
     </label>
+  </section>
+
+  <section class="card" id="payCard" aria-labelledby="h-pay">
+    <h2 id="h-pay">แนบสลิปโอนเงิน</h2>
+    <p class="hint" id="payLock">ใส่อีเมลที่สั่งไว้ในช่อง "ผู้สั่ง" ด้านบน หรือสั่งของให้เสร็จก่อน แล้วจะแนบสลิปได้ที่นี่</p>
+    <div id="payBody" hidden class="paybody">
+    <div class="paysum num" id="paySum"></div>
+    <p class="hint">โอนตามบัญชีที่กรรมการแจ้งในกลุ่ม แล้วแนบรูปสลิปที่นี่ กรรมการจะตรวจและยืนยันให้ · โอนหลายครั้งก็แนบได้หลายใบ</p>
+    <label class="field" for="payAmount"><span>ยอดที่โอน (บาท) <span class="req">*</span></span>
+      <input type="text" id="payAmount" inputmode="decimal" autocomplete="off" placeholder="เช่น 685">
+    </label>
+    <label class="filepick" for="payFile">
+      <input type="file" id="payFile" accept="image/*">
+      <span id="payPickText">+ เลือกรูปสลิป</span>
+      <small>ภาพหน้าจอจากแอปธนาคาร หรือถ่ายรูปสลิป</small>
+    </label>
+    <img id="payPreview" class="slipprev" alt="สลิปที่เลือก" hidden>
+    <div class="err" id="payErr" hidden></div>
+    <div class="okmsg" id="payOk" hidden></div>
+    <button type="button" class="btn sunbtn" id="paySend" disabled>ส่งสลิป</button>
+    <div class="slips" id="paySlips"></div>
+    </div>
   </section>
 
   <footer>ปิดรับคำสั่งซื้อ 30 ตุลาคม 2569 · มีคำถามทักกรรมการในกลุ่มได้เลย</footer>
@@ -575,16 +579,17 @@ function renderHistory() {
     '<ul>' + H.orders.map(function (o) { return '<li><b>' + esc(o.id) + '</b> · ' + when(o.ts) + ' — ' + esc(itemsText(o)) + '</li>'; }).join('') + '</ul>' +
     '<div class="sumline num"><span>ยอดที่สั่งไปแล้ว</span><span>' + baht(sum) + (c.giftTee ? ' + เสื้อยืดครู' : '') + '</span></div>' +
     (H.slips.length ? '<div class="num">แนบสลิปแล้ว ' + H.slips.length + ' ใบ รวม ' + baht(paidSum()) + '</div>' : '') +
-    '<div class="hint">สั่งเพิ่มได้เลย ระบบจะรวมยอดเข้าบ้านเดียวกัน</div>';
+    '<div class="hint">สั่งเพิ่มได้เลย ระบบจะรวมยอดเข้าบ้านเดียวกัน</div>' +
+    '<div><button type="button" class="btn ghost" id="goPay">แนบสลิปโอนเงิน ↓</button></div>';
 }
 
 /* ---------- payment slip ---------- */
 function paidSum() { return H.slips.reduce(function (t, x) { return t + (Number(x.amount) || 0); }, 0); }
 function dueSum() { return H.orders.reduce(function (t, o) { return t + (o.total || 0); }, 0); }
 function renderPay() {
-  var card = $('payCard');
-  card.hidden = !(H.email && H.orders.length);
-  if (card.hidden) return;
+  var has = !!(H.email && H.orders.length);
+  $('payBody').hidden = !has; $('payLock').hidden = has;
+  if (!has) return;
   var due = dueSum(), paid = paidSum(), left = Math.max(0, due - paid);
   var tee = H.orders.reduce(function (t, o) { return t + (o.giftTeePending || 0); }, 0);
   $('paySum').innerHTML = '<div><b>ยอดสั่ง</b><strong>' + baht(due) + '</strong></div>' +
@@ -874,6 +879,7 @@ function send() {
   $('payFile').addEventListener('change', pickSlip);
   $('payAmount').addEventListener('input', function () { P.amountTouched = true; payReady(); });
   $('paySend').addEventListener('click', sendSlip);
+  $('history').addEventListener('click', function (e) { if (e.target.id === 'goPay') $('payCard').scrollIntoView({ block: 'start', behavior: 'smooth' }); });
   $('sheet').addEventListener('click', function (e) {
     if (e.target.id === 'toPay') { closeSheet(); $('payCard').scrollIntoView({ block: 'start', behavior: 'smooth' }); }
     else if (e.target === $('sheet') || e.target.closest('[data-close]') || e.target.id === 'again') closeSheet();
