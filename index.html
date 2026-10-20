@@ -51,6 +51,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
@@ -77,14 +78,14 @@ h1 .no { color: var(--sky); }
 
 /* price tags */
 .tags { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.tag { position: relative; background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px 10px 10px 10px;
-  padding: 12px 10px 10px 22px; display: grid; gap: 2px; min-width: 0; }
-.tag::before { content: ""; position: absolute; left: 8px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px;
+.tag { position: relative; background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px;
+  padding: 12px 12px 10px; display: grid; gap: 2px; min-width: 0; }
+.tag::before { content: ""; position: absolute; right: 10px; top: 10px; width: 7px; height: 7px;
   border-radius: 50%; background: var(--bg); border: 1.5px solid var(--line); }
 .tag b { font-size: 13px; font-weight: 600; color: var(--muted); }
 .tag strong { font-family: var(--f-display); font-size: 19px; line-height: 1.2; }
 .tag small { font-size: 12px; color: var(--muted); line-height: 1.35; }
-@media (max-width: 380px) { .tag strong { font-size: 16px; } .tag { padding-left: 18px; } .tag::before { left: 6px; } }
+@media (max-width: 380px) { .tag strong { font-size: 17px; } .tag { padding: 10px 9px 9px; } .tag::before { right: 7px; top: 7px; } }
 
 .history { background: var(--info-bg); border-radius: 12px; padding: 12px; font-size: 14.5px; display: grid; gap: 6px; }
 .history .head { font-weight: 700; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -229,16 +230,16 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
 
   <section class="card" aria-labelledby="h-who">
     <h2 id="h-who">ผู้สั่ง</h2>
-    <label class="field" for="name">ชื่อผู้สั่ง <span class="req">*</span>
+    <label class="field" for="name"><span>ชื่อผู้สั่ง <span class="req">*</span></span>
       <input type="text" id="name" autocomplete="off" placeholder="เช่น แม่บี น้องเอ็กซ์">
     </label>
     <div class="result taken" id="nameDup" hidden></div>
-    <label class="field" for="email">อีเมลผู้ปกครอง <span class="req">*</span>
+    <label class="field" for="email"><span>อีเมลผู้ปกครอง <span class="req">*</span></span>
       <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="name@gmail.com">
       <span class="hint" style="font-weight:400">ใช้อีเมลเดิมทุกครั้งที่สั่ง ระบบจะรวมยอดที่เคยสั่งไว้ให้</span>
     </label>
     <div class="history" id="history" hidden></div>
-    <label class="field" for="contact">เบอร์โทร / LINE ID <span class="hint" style="font-weight:400">(ไม่บังคับ)</span>
+    <label class="field" for="contact"><span>เบอร์โทร / LINE ID <span class="hint" style="font-weight:400">(ไม่บังคับ)</span></span>
       <input type="text" id="contact" autocomplete="off" placeholder="เช่น 081-234-5678 หรือ LINE: mom_bee">
     </label>
   </section>
@@ -623,7 +624,7 @@ function refresh() {
 function renderClosing() {
   var el = $('closing');
   if (R.closed) { el.textContent = 'ปิดรับคำสั่งซื้อแล้ว'; el.classList.add('shut'); return; }
-  var days = Math.ceil((CLOSE_AT.getTime() - Date.now()) / 86400000);
+  var days = Math.floor((CLOSE_AT.getTime() - Date.now()) / 86400000);
   el.textContent = 'ปิดรับ 30 ต.ค. 69 · ' + (days <= 1 ? 'วันสุดท้าย' : 'เหลือ ' + days + ' วัน');
 }
 
