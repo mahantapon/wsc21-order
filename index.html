@@ -263,7 +263,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     <div class="result taken" id="nameDup" hidden></div>
     <label class="field" for="email"><span>อีเมลผู้ปกครอง <span class="req">*</span></span>
       <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="name@gmail.com">
-      <span class="hint" style="font-weight:400">ใช้อีเมลเดิมทุกครั้งที่สั่ง ระบบจะรวมยอดให้ และส่งใบสรุปยอดไปที่อีเมลนี้</span>
+      <span class="hint" style="font-weight:400">ใช้อีเมลเดิมทุกครั้งที่สั่ง ระบบจะรวมยอดให้ · เมื่อกรรมการยืนยันยอดโอนแล้ว จะส่งใบสรุปยอดไปที่อีเมลนี้</span>
     </label>
     <div class="result taken" id="emailTypo" hidden></div>
     <div class="history" id="history" hidden></div>
@@ -715,7 +715,7 @@ function sendSlip() {
     $('payOk').hidden = false;
     $('payOk').textContent = 'ส่งสลิป ' + d.slip.id + ' แล้ว ยอด ' + baht(Number(d.slip.amount) || 0) + ' · ' +
       (d.slip.ocr === 'match' ? 'ระบบอ่านยอดในสลิปตรง ' : d.slip.ocr === 'unreadable' ? 'ระบบอ่านยอดในสลิปไม่ได้ กรรมการจะตรวจให้ ' : '') +
-      'รอกรรมการยืนยัน' + (d.mailed ? ' · ส่งใบสรุปยอดไปที่ ' + em + ' แล้ว' : '');
+      'รอกรรมการยืนยัน · ยืนยันแล้วจะส่งใบสรุปยอดไปที่ ' + em + (d.mailed ? ' (ส่งแล้ว)' : '');
     renderHistory();
   }).catch(function (e) {
     $('payErr').hidden = false; $('payErr').textContent = 'ส่งไม่สำเร็จ: ' + e.message + ' · กดส่งอีกครั้งได้ ระบบจะไม่บันทึกซ้ำ';
@@ -824,7 +824,7 @@ function send() {
       openSheet('<div class="done"><div class="big">สั่งเรียบร้อยแล้ว</div></div><div>เลขที่คำสั่งซื้อ <span class="code">' + esc(o.id) + '</span></div>' +
         slipHTML(saved, c, true) + grandHTML(H.orders, 'ทั้งหมดของอีเมลนี้') +
         (d.mailed ? '<div class="okmsg">ส่งใบสรุปยอดไปที่ ' + esc(normEmail(sent.email)) + ' แล้ว (ถ้าไม่เห็นให้ดูในโฟลเดอร์ Spam/Promotions)</div>' : '') +
-        '<p class="hint">กด "แนบสลิปโอนเงิน" เพื่อสแกน QR โอนเงินและแนบสลิป · แคปหน้าจอนี้เก็บไว้ได้ ต้องการแก้ไขแจ้งกรรมการพร้อมเลขที่คำสั่งซื้อ · สั่งเพิ่มได้ด้วยอีเมลเดิม</p>' +
+        '<p class="hint">กด "แนบสลิปโอนเงิน" เพื่อสแกน QR โอนเงินและแนบสลิป · เมื่อกรรมการยืนยันยอดแล้ว จะส่งใบสรุปยอดไปที่อีเมลนี้ · แคปหน้าจอนี้เก็บไว้ได้ ต้องการแก้ไขแจ้งกรรมการพร้อมเลขที่คำสั่งซื้อ · สั่งเพิ่มได้ด้วยอีเมลเดิม</p>' +
         '<div class="actions"><button type="button" class="btn ghost" id="again">เสร็จสิ้น</button><button type="button" class="btn sunbtn" id="toPay">แนบสลิปโอนเงิน</button></div>');
       S = blank(sent);
       $('note').value = '';
