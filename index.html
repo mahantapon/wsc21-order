@@ -113,6 +113,10 @@ h1 .no { color: var(--sky); }
 .slipprev { max-height: 280px; width: auto; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); justify-self: start; }
 .slips { display: grid; gap: 6px; }
 .paybody { display: grid; gap: 14px; }
+.dueline { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; background: var(--warn-bg); border-radius: 12px; padding: 12px 14px; }
+.dueline b { font-size: 15px; }
+.dueline strong { font-family: var(--f-display); font-size: 26px; }
+.paystatus { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; }
 .sliprow { display: flex; justify-content: space-between; align-items: center; gap: 6px 10px; flex-wrap: wrap; background: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
 .okmsg { background: var(--ok-bg); border-radius: 10px; padding: 10px 12px; font-size: 14.5px; }
 .pill.wait { background: var(--chip); color: var(--muted); }
@@ -259,8 +263,9 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     <div class="result taken" id="nameDup" hidden></div>
     <label class="field" for="email"><span>อีเมลผู้ปกครอง <span class="req">*</span></span>
       <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="name@gmail.com">
-      <span class="hint" style="font-weight:400">ใช้อีเมลเดิมทุกครั้งที่สั่ง ระบบจะรวมยอดที่เคยสั่งไว้ให้</span>
+      <span class="hint" style="font-weight:400">ใช้อีเมลเดิมทุกครั้งที่สั่ง ระบบจะรวมยอดให้ และส่งใบสรุปยอดไปที่อีเมลนี้</span>
     </label>
+    <div class="result taken" id="emailTypo" hidden></div>
     <div class="history" id="history" hidden></div>
     <label class="field" for="contact"><span>เบอร์โทร / LINE ID <span class="hint" style="font-weight:400">(ไม่บังคับ)</span></span>
       <input type="text" id="contact" autocomplete="off" placeholder="เช่น 081-234-5678 หรือ LINE: mom_bee">
@@ -320,10 +325,10 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     <p class="hint" id="payLock">ใส่อีเมลที่สั่งไว้ในช่อง "ผู้สั่ง" ด้านบน หรือสั่งของให้เสร็จก่อน แล้วจะแนบสลิปได้ที่นี่</p>
     <div id="payBody" hidden class="paybody">
     <div class="paysum num" id="paySum"></div>
-    <p class="hint">โอนผ่าน QR ด้านบนแล้วแนบรูปสลิปที่นี่ กรรมการจะตรวจและยืนยันให้ · โอนหลายครั้งก็แนบได้หลายใบ</p>
-    <label class="field" for="payAmount"><span>ยอดที่โอน (บาท) <span class="req">*</span></span>
-      <input type="text" id="payAmount" inputmode="decimal" autocomplete="off" placeholder="เช่น 685">
-    </label>
+    <div class="okmsg" id="payDone" hidden>ชำระครบแล้ว ไม่มียอดค้าง · ถ้าสั่งเพิ่ม ยอดใหม่จะขึ้นที่นี่</div>
+    <div class="paybody" id="payUpload">
+    <div class="dueline num" id="payDue"></div>
+    <p class="hint">โอนผ่าน QR ด้านบน <b>ตามยอดนี้พอดี</b> แล้วแนบรูปสลิป ระบบจะอ่านยอดในสลิป ถ้าไม่ตรงกับยอดที่ต้องโอนจะไม่รับ · ใช้สลิปเดิมซ้ำไม่ได้</p>
     <label class="filepick" for="payFile">
       <input type="file" id="payFile" accept="image/*">
       <span id="payPickText">+ เลือกรูปสลิป</span>
@@ -333,6 +338,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     <div class="err" id="payErr" hidden></div>
     <div class="okmsg" id="payOk" hidden></div>
     <button type="button" class="btn sunbtn" id="paySend" disabled>ส่งสลิป</button>
+    </div>
     <div class="slips" id="paySlips"></div>
     </div>
   </section>
@@ -372,7 +378,7 @@ function blank(keep) { return { name: keep ? keep.name : '', email: keep ? keep.
 var S = blank();
 var R = { orderers: [], closed: Date.now() > CLOSE_AT.getTime(), loaded: false };
 var H = { email: '', orders: [], slips: [], loading: false }; // this parent's earlier orders and slips
-var P = { image: '', amountTouched: false, cid: '' }; // slip being attached
+var P = { image: '', cid: '' }; // slip being attached
 var hoodSig = '';          // which hood lines are on screen (the name inputs are rebuilt only when this changes)
 var pendingFocus = false;  // jump to the first missing hood name after closing the review sheet
 
@@ -478,6 +484,12 @@ function unitsOf(o) {
   HOOD.forEach(function (r) { for (var i = 0; i < ((o.hood || {})[r[0]] || 0); i++) u.push({ size: r[0], name: '', free: false }); });
   return u;
 }
+// what an order contains, ignoring which hoodie was the free one — two orders with the same signature look like a double order
+function orderSig(o) {
+  var u = unitsOf(o).map(function (x) { return x.size + ':' + String(x.name || '').toLowerCase(); }).sort().join(',');
+  var t = TEE.filter(function (r) { return (o.tee || {})[r[0]]; }).map(function (r) { return r[0] + 'x' + o.tee[r[0]]; }).join(',');
+  return u + '|' + t + '|' + (o.umbrella || 0);
+}
 function unitText(u) { return u.size + (u.name ? ' (' + u.name + ')' : '') + (u.free ? ' ฟรี' : ''); }
 function itemsText(o) {
   var parts = [];
@@ -570,6 +582,19 @@ function onEmail() {
   clearTimeout(emailTimer);
   emailTimer = setTimeout(lookupEmail, 600);
 }
+// common slips of the finger: the summary e-mail would bounce, so suggest the likely address (never blocks)
+var TYPOS = [[/\.con$/, '.com'], [/\.cmo$/, '.com'], [/\.comm$/, '.com'], [/\.co\.th\.com$/, '.co.th'],
+  [/@(gmial|gamil|gmai|gmal|gnail|gmaill)\./, '@gmail.'], [/@gmail\.co$/, '@gmail.com'],
+  [/@(hotmial|hotmal|hotmil|hotmai)\./, '@hotmail.'], [/@hotmail\.co$/, '@hotmail.com'], [/@(yaho|yahooo)\./, '@yahoo.']];
+function checkEmailTypo() {
+  var em = normEmail($('email').value), fix = em, box = $('emailTypo');
+  TYPOS.forEach(function (t) { fix = fix.replace(t[0], t[1]); });
+  if (!EMAIL_RE.test(em) || fix === em) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = '<div class="head"><span class="pill warn">อีเมลอาจพิมพ์ผิด</span> หมายถึง <b>' + esc(fix) + '</b> หรือเปล่า</div>' +
+    '<div><button type="button" class="btn ghost" id="useFix" data-fix="' + esc(fix) + '">ใช้ ' + esc(fix) + '</button></div>' +
+    '<div class="hint">ถ้าอีเมลผิด ใบสรุปยอดจะส่งไม่ถึง</div>';
+}
 function lookupEmail() {
   var em = normEmail(S.email);
   if (!EMAIL_RE.test(em)) { H = { email: '', orders: [], slips: [], loading: false }; renderHistory(); update(); return; }
@@ -592,6 +617,7 @@ function renderHistory() {
   box.innerHTML = '<div class="head"><span class="pill fund">เคยสั่งแล้ว ' + H.orders.length + ' ครั้ง</span> รวม ' + c.pieces + ' ชิ้น</div>' +
     '<ul>' + H.orders.map(function (o) { return '<li><b>' + esc(o.id) + '</b> · ' + when(o.ts) + ' — ' + esc(itemsText(o)) + '</li>'; }).join('') + '</ul>' +
     '<div class="sumline num"><span>ยอดที่สั่งไปแล้ว</span><span>' + baht(sum) + '</span></div>' +
+    '<div class="paystatus">สถานะการโอน <span class="pill ' + payStatus()[1] + '">' + payStatus()[0] + '</span>' + (leftSum() > 0 ? ' <span class="num">ค้าง ' + baht(leftSum()) + '</span>' : '') + '</div>' +
     (H.slips.length ? '<div class="num">แนบสลิปแล้ว ' + H.slips.length + ' ใบ รวม ' + baht(paidSum()) + '</div>' : '') +
     '<div class="hint">สั่งเพิ่มได้เลย ระบบจะรวมยอดเข้าบ้านเดียวกัน</div>' +
     '<div><button type="button" class="btn ghost" id="goPay">แนบสลิปโอนเงิน ↓</button></div>';
@@ -600,23 +626,31 @@ function renderHistory() {
 /* ---------- payment slip ---------- */
 function paidSum() { return H.slips.reduce(function (t, x) { return t + (Number(x.amount) || 0); }, 0); }
 function dueSum() { return H.orders.reduce(function (t, o) { return t + (o.total || 0); }, 0); }
+function leftSum() { return Math.max(0, Math.round((dueSum() - paidSum()) * 100) / 100); }
+// same wording as the admin page and the e-mail
+function payStatus() {
+  if (leftSum() > 0) return paidSum() > 0 ? ['โอนไม่ครบ', 'warn'] : ['ยังไม่ได้โอน', 'warn'];
+  return H.slips.some(function (x) { return !x.checked; }) ? ['แนบสลิปครบแล้ว รอกรรมการตรวจ', 'fund'] : ['ชำระครบ กรรมการตรวจแล้ว', 'ok'];
+}
 function renderPay() {
   var has = !!(H.email && H.orders.length);
   $('payBody').hidden = !has; $('payLock').hidden = has;
   if (!has) return;
-  var due = dueSum(), paid = paidSum(), left = Math.max(0, due - paid);
+  var due = dueSum(), paid = paidSum(), left = leftSum(), st = payStatus();
   $('paySum').innerHTML = '<div><b>ยอดสั่ง</b><strong>' + baht(due) + '</strong></div>' +
-    '<div class="paid"><b>แนบสลิปแล้ว</b><strong>' + baht(paid) + '</strong></div>' +
-    '<div class="due"><b>คงเหลือ</b><strong>' + baht(left) + '</strong></div>';
-  if (!P.amountTouched) $('payAmount').value = left ? String(left) : '';
+    '<div class="paid"><b>ชำระแล้ว</b><strong>' + baht(paid) + '</strong></div>' +
+    '<div class="due"><b>คงเหลือ</b><strong>' + baht(left) + '</strong></div>' +
+    '<div class="paystatus">สถานะ <span class="pill ' + st[1] + '">' + st[0] + '</span></div>';
+  $('payDone').hidden = left > 0; $('payUpload').hidden = left <= 0;
+  $('payDue').innerHTML = '<b>ยอดที่ต้องโอน</b><strong>' + baht(left) + '</strong>';
   $('paySlips').innerHTML = H.slips.map(function (x) {
     return '<div class="sliprow num"><span><b>' + esc(x.id) + '</b> · ' + when(x.ts) + ' · ' + baht(Number(x.amount) || 0) + '</span>' +
       (x.checked ? '<span class="pill ok">กรรมการตรวจแล้ว</span>' : '<span class="pill wait">รอตรวจ</span>') + '</div>';
   }).join('');
   payReady();
 }
-function payAmount() { var n = Number(String($('payAmount').value).replace(/[^\d.]/g, '')); return n > 0 ? n : 0; }
-function payReady() { $('paySend').disabled = !(P.image && payAmount() && H.orders.length); }
+function payAmount() { return leftSum(); }
+function payReady() { $('paySend').disabled = !(P.image && payAmount() > 0 && H.orders.length); }
 function shrink(file) {
   return new Promise(function (resolve, reject) {
     var url = URL.createObjectURL(file), img = new Image();
@@ -649,7 +683,7 @@ function pickSlip() {
   });
 }
 function postSlip(payload, tries) {
-  return call(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'slip', slip: payload }) }, 45000, 'slip')
+  return call(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'slip', slip: payload }) }, 90000, 'slip')
     .catch(function (e) {
       if (tries > 0) return wait(1500).then(function () { return postSlip(payload, tries - 1); });
       return getJSON('action=mine&email=' + encodeURIComponent(payload.email), 'orders').then(function (d) {
@@ -662,13 +696,20 @@ function postSlip(payload, tries) {
 function sendSlip() {
   var btn = $('paySend'), em = normEmail($('email').value);
   if (!P.image || !payAmount() || em !== H.email) return;
-  btn.disabled = true; btn.textContent = 'กำลังส่งสลิป…'; $('payErr').hidden = true; $('payOk').hidden = true;
+  btn.disabled = true; btn.textContent = 'กำลังตรวจสลิป… (10–20 วินาที)'; $('payErr').hidden = true; $('payOk').hidden = true;
   postSlip({ email: em, amount: payAmount(), image: P.image, cid: P.cid }, 2).then(function (d) {
-    if (!d || !d.ok) throw new Error((d && d.error) || 'ส่งไม่สำเร็จ');
+    if (!d || !d.ok) {   // the server read the slip and said no: show why, keep the picture so they can pick another
+      $('payErr').hidden = false; $('payErr').textContent = (d && d.error) || 'ส่งไม่สำเร็จ';
+      P.cid = newCid();
+      return;
+    }
     H.slips = d.slips || H.slips.concat([d.slip]);
-    P = { image: '', amountTouched: false, cid: '' };
+    P = { image: '', cid: '' };
     $('payFile').value = ''; $('payPreview').hidden = true; $('payPickText').textContent = '+ เลือกรูปสลิป';
-    $('payOk').hidden = false; $('payOk').textContent = 'ส่งสลิป ' + d.slip.id + ' แล้ว ยอด ' + baht(Number(d.slip.amount) || 0) + ' รอกรรมการตรวจ';
+    $('payOk').hidden = false;
+    $('payOk').textContent = 'ส่งสลิป ' + d.slip.id + ' แล้ว ยอด ' + baht(Number(d.slip.amount) || 0) + ' · ' +
+      (d.slip.ocr === 'match' ? 'ระบบอ่านยอดในสลิปตรง ' : d.slip.ocr === 'unreadable' ? 'ระบบอ่านยอดในสลิปไม่ได้ กรรมการจะตรวจให้ ' : '') +
+      'รอกรรมการยืนยัน' + (d.mailed ? ' · ส่งใบสรุปยอดไปที่ ' + em + ' แล้ว' : '');
     renderHistory();
   }).catch(function (e) {
     $('payErr').hidden = false; $('payErr').textContent = 'ส่งไม่สำเร็จ: ' + e.message + ' · กดส่งอีกครั้งได้ ระบบจะไม่บันทึกซ้ำ';
@@ -740,10 +781,15 @@ function review() {
   }
   var mine = H.email === normEmail(S.email) ? H.orders : [];
   var after = mine.concat([{ hoodFree: v.hoodFree, hood: v.hood, hoodUnits: v.hoodUnits, tee: v.tee, umbrella: v.umbrella, total: c.total }]);
-  openSheet('<h2 id="sheetTitle">ตรวจสอบรายการ</h2>' + slipHTML(v, c, true) +
+  var twin = mine.filter(function (o) { return orderSig(o) === orderSig(v); });
+  openSheet('<h2 id="sheetTitle">ตรวจสอบรายการ</h2>' +
+    (twin.length ? '<div class="result taken"><div class="head"><span class="pill warn">อาจสั่งซ้ำ</span> อีเมลนี้เคยสั่งรายการเดียวกันนี้แล้ว</div><ul>' +
+      twin.map(function (o) { return '<li>' + esc(o.id) + ' · ' + when(o.ts) + ' · ' + baht(o.total || 0) + '</li>'; }).join('') +
+      '</ul><div class="hint">ถ้าตั้งใจสั่งเพิ่มอีกชุด กดยืนยันได้เลย ถ้าไม่ใช่ กด "แก้ไข"</div></div>' : '') +
+    slipHTML(v, c, true) +
     (mine.length ? grandHTML(after, 'รวมกับที่เคยสั่งไว้') : '') +
     '<div class="err" id="sendErr" hidden></div>' +
-    '<div class="actions"><button type="button" class="btn ghost" data-close>แก้ไข</button><button type="button" class="btn sunbtn" id="send">ยืนยันสั่งซื้อ</button></div>');
+    '<div class="actions"><button type="button" class="btn ghost" data-close>แก้ไข</button><button type="button" class="btn sunbtn" id="send">' + (twin.length ? 'ยืนยันสั่งซ้ำ' : 'ยืนยันสั่งซื้อ') + '</button></div>');
 }
 // send once; if the reply gets lost, retry with the same cid (the server ignores repeats) and finally look it up by email
 function postOrder(payload, tries) {
@@ -770,6 +816,7 @@ function send() {
       H = { email: normEmail(sent.email), orders: d.orders || [o], slips: d.slips || H.slips || [], loading: false };
       openSheet('<div class="done"><div class="big">สั่งเรียบร้อยแล้ว</div></div><div>เลขที่คำสั่งซื้อ <span class="code">' + esc(o.id) + '</span></div>' +
         slipHTML(saved, c, true) + grandHTML(H.orders, 'ทั้งหมดของอีเมลนี้') +
+        (d.mailed ? '<div class="okmsg">ส่งใบสรุปยอดไปที่ ' + esc(normEmail(sent.email)) + ' แล้ว (ถ้าไม่เห็นให้ดูในโฟลเดอร์ Spam/Promotions)</div>' : '') +
         '<p class="hint">กด "แนบสลิปโอนเงิน" เพื่อสแกน QR โอนเงินและแนบสลิป · แคปหน้าจอนี้เก็บไว้ได้ ต้องการแก้ไขแจ้งกรรมการพร้อมเลขที่คำสั่งซื้อ · สั่งเพิ่มได้ด้วยอีเมลเดิม</p>' +
         '<div class="actions"><button type="button" class="btn ghost" id="again">เสร็จสิ้น</button><button type="button" class="btn sunbtn" id="toPay">แนบสลิปโอนเงิน</button></div>');
       S = blank(sent);
@@ -793,9 +840,14 @@ function send() {
   }
   $('name').value = S.name; $('email').value = S.email; $('contact').value = S.contact; $('note').value = S.note;
   buildHoodChart(); buildRows(); renderClosing(); update();
-  if (S.email) lookupEmail();
+  if (S.email) { lookupEmail(); checkEmailTypo(); }
   $('name').addEventListener('input', function () { S.name = this.value; checkName(); store('wsc21-draft', S); });
   $('email').addEventListener('input', onEmail);
+  $('email').addEventListener('input', checkEmailTypo);
+  $('emailTypo').addEventListener('click', function (e) {
+    var b = e.target.closest('#useFix'); if (!b) return;
+    $('email').value = b.getAttribute('data-fix'); onEmail(); checkEmailTypo(); clearTimeout(emailTimer); lookupEmail();
+  });
   $('email').addEventListener('blur', function () { clearTimeout(emailTimer); lookupEmail(); });
   $('contact').addEventListener('input', function () { S.contact = this.value; store('wsc21-draft', S); });
   $('note').addEventListener('input', function () { S.note = this.value; store('wsc21-draft', S); });
@@ -807,7 +859,6 @@ function send() {
   });
   $('review').addEventListener('click', review);
   $('payFile').addEventListener('change', pickSlip);
-  $('payAmount').addEventListener('input', function () { P.amountTouched = true; payReady(); });
   $('paySend').addEventListener('click', sendSlip);
   $('history').addEventListener('click', function (e) { if (e.target.id === 'goPay') $('payCard').scrollIntoView({ block: 'start', behavior: 'smooth' }); });
   $('sheet').addEventListener('click', function (e) {
