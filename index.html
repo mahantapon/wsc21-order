@@ -166,6 +166,8 @@ table.mini th { font-weight: 600; color: var(--muted); font-size: 12.5px; }
 
 .note { border-radius: 12px; padding: 10px 12px; font-size: 14px; background: var(--info-bg); }
 .note b { font-weight: 700; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.dept { color: var(--muted); font-weight: 500; }
 
 /* teacher check */
 .checkbox { display: grid; gap: 10px; }
@@ -310,13 +312,18 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     <h2 id="h-gift">สั่งให้ครู / บุคลากร</h2>
     <div class="note">
       งบกองกลางให้แล้ว: <b>Hood</b> สำหรับครูไอซ์ ครูต่อ ครูฟิน ครูแซนดี้ ครูเปิ้ล และ<b>ร่ม</b>สำหรับครูและบุคลากรทั้งหมด 130 คน<br>
-      ถ้าอยากสั่งเพิ่มเป็นการส่วนตัว พิมพ์ชื่อครูก่อน ระบบจะเช็คให้ว่ามีคนสั่งให้แล้วหรือยัง
+      ถ้าอยากสั่งเพิ่มเป็นการส่วนตัว ใส่<b>ชื่อเล่นครู</b>และ<b>แผนก</b> ระบบจะเช็คให้ว่ามีคนสั่งให้แล้วหรือยัง
     </div>
     <div class="checkbox">
-      <label class="field" for="teacher">ชื่อครู / บุคลากร
-        <input type="text" id="teacher" autocomplete="off" placeholder="เช่น ครูไอซ์">
-      </label>
-      <div class="result idle" id="teacherResult" aria-live="polite">พิมพ์ชื่อครูเพื่อเช็ค</div>
+      <div class="two">
+        <label class="field" for="teacher"><span>ชื่อเล่นครู / บุคลากร <span class="req">*</span></span>
+          <input type="text" id="teacher" autocomplete="off" placeholder="เช่น ไอซ์">
+        </label>
+        <label class="field" for="dept"><span>แผนก <span class="req">*</span></span>
+          <input type="text" id="dept" autocomplete="off" placeholder="เช่น อนุบาล / ดนตรี">
+        </label>
+      </div>
+      <div class="result idle" id="teacherResult" aria-live="polite">ใส่ชื่อเล่นและแผนกของครูเพื่อเช็ค</div>
       <div class="addbtns">
         <button type="button" class="btn ghost" id="addHood" disabled>+ Hood ให้ครู<small>290 บาท</small></button>
         <button type="button" class="btn ghost" id="addTee" disabled>+ เสื้อยืดให้ครู<small>150–280 ตามไซส์ครู</small></button>
@@ -414,6 +421,10 @@ function sameTeacher(a, b) {
   if (a === b) return true;
   return Math.min(a.length, b.length) >= 3 && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0);
 }
+function deptKey(s) { return String(s || '').toLowerCase().replace(/^\s*(แผนก|ฝ่าย|ระดับ|ชั้น)\s*/, '').replace(/[\s.\-_,()'"\u0e4c\u200b-\u200d]/g, ''); }
+function deptOk(a, b) { a = deptKey(a); b = deptKey(b); if (!a || !b) return true; return a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0; }
+function giftText(g) { return g.teacher + (g.dept ? ' (' + g.dept + ')' : ''); }
+function giftHTML(g) { return esc(g.teacher) + (g.dept ? ' <span class="dept">(' + esc(g.dept) + ')</span>' : ''); }
 function nameKey(s) { return String(s || '').toLowerCase().replace(/[\s.\-_,()'"]/g, '').replace(/[์​-‍]/g, ''); }
 function itemName(i) { return i === 'tee' ? 'เสื้อยืด' : 'Hood'; }
 
@@ -487,7 +498,7 @@ function itemsText(o) {
   var t = TEE.filter(function (r) { return o.tee[r[0]]; }).map(function (r) { return r[0] + '×' + o.tee[r[0]]; });
   if (t.length) parts.push('เสื้อยืด ' + t.join(', '));
   if (o.umbrella) parts.push('ร่ม ' + o.umbrella);
-  (o.gifts || []).forEach(function (g) { parts.push(itemName(g.item) + 'ให้' + g.teacher); });
+  (o.gifts || []).forEach(function (g) { parts.push(itemName(g.item) + 'ให้' + giftText(g)); });
   return parts.join(' · ');
 }
 function setRow(id, n, sum) {
@@ -660,13 +671,13 @@ function checkName() {
 }
 
 /* ---------- teacher check ---------- */
-function teacherMatches(raw) {
+function teacherMatches(raw, dept) {
   var k = teacherKey(raw);
-  var res = { key: k, fund: [], orders: [], cart: [] };
+  var res = { key: k, fund: [], orders: [], cart: [], other: [] };
   if (k.length < 2) return res;
   CENTRAL.forEach(function (c) { if (sameTeacher(k, teacherKey(c))) res.fund.push(c); });
-  R.gifts.forEach(function (g) { if (sameTeacher(k, teacherKey(g.teacher))) res.orders.push(g); });
-  S.gifts.forEach(function (g) { if (sameTeacher(k, teacherKey(g.teacher))) res.cart.push(g); });
+  R.gifts.forEach(function (g) { if (sameTeacher(k, teacherKey(g.teacher))) (deptOk(dept, g.dept) ? res.orders : res.other).push(g); });
+  S.gifts.forEach(function (g) { if (sameTeacher(k, teacherKey(g.teacher))) (deptOk(dept, g.dept) ? res.cart : res.other).push(g); });
   return res;
 }
 function hasItem(m, item) {
@@ -674,34 +685,39 @@ function hasItem(m, item) {
   return m.orders.concat(m.cart).some(function (g) { return g.item === item; });
 }
 function renderTeacher() {
-  var raw = $('teacher').value.trim(), m = teacherMatches(raw), box = $('teacherResult');
-  $('addHood').disabled = $('addTee').disabled = m.key.length < 2 || R.closed;
+  var raw = $('teacher').value.trim(), dept = $('dept').value.trim(), m = teacherMatches(raw, dept), box = $('teacherResult');
+  var ready = m.key.length >= 2 && deptKey(dept).length >= 1;
+  $('addHood').disabled = $('addTee').disabled = !ready || R.closed;
   ['addHood', 'addTee'].forEach(function (id) { $(id).classList.remove('confirm'); });
   armed = null;
   $('addHood').firstChild.textContent = '+ Hood ให้ครู';
   $('addTee').firstChild.textContent = '+ เสื้อยืดให้ครู';
-  if (m.key.length < 2) { box.className = 'result idle'; box.textContent = 'พิมพ์ชื่อครูเพื่อเช็ค'; return; }
-  var who = esc(raw);
+  if (m.key.length < 2) { box.className = 'result idle'; box.textContent = 'ใส่ชื่อเล่นและแผนกของครูเพื่อเช็ค'; return; }
+  var who = giftHTML({ teacher: raw, dept: dept });
+  var otherLines = m.other.length ? '<div class="hint">มีครูชื่อเล่นเดียวกันแต่คนละแผนก (ถือเป็นคนละท่าน): ' +
+    m.other.map(function (g) { return itemName(g.item) + ' ให้ ' + esc(giftText(g)); }).join(', ') + '</div>' : '';
+  if (!dept) { box.className = 'result idle'; box.innerHTML = 'ใส่แผนกของ ' + esc(raw) + ' ด้วย เช่น อนุบาล / ประถม / ดนตรี' + otherLines; return; }
   if (!m.fund.length && !m.orders.length && !m.cart.length) {
     box.className = 'result clear';
-    box.innerHTML = '<div class="head"><span class="pill ok">ยังไม่มีคนสั่ง</span> ยังไม่มีใครสั่งให้ ' + who + '</div>' +
+    box.innerHTML = '<div class="head"><span class="pill ok">ยังไม่มีคนสั่ง</span> ยังไม่มีใครสั่งให้ ' + who + '</div>' + otherLines +
       (R.loaded ? '' : '<div class="hint">กำลังโหลดรายชื่อล่าสุด…</div>');
     return;
   }
   var lines = [];
   m.fund.forEach(function (f) { lines.push('<li><b>Hood</b> จากงบกองกลาง (' + esc(f) + ')</li>'); });
-  m.orders.forEach(function (g) { lines.push('<li><b>' + itemName(g.item) + '</b> ให้ ' + esc(g.teacher) + ' · โดย ' + esc(g.by) + ' · ' + when(g.ts) + '</li>'); });
-  m.cart.forEach(function (g) { lines.push('<li><b>' + itemName(g.item) + '</b> ให้ ' + esc(g.teacher) + ' · อยู่ในรายการของคุณแล้ว</li>'); });
+  m.orders.forEach(function (g) { lines.push('<li><b>' + itemName(g.item) + '</b> ให้ ' + giftHTML(g) + ' · โดย ' + esc(g.by) + ' · ' + when(g.ts) + '</li>'); });
+  m.cart.forEach(function (g) { lines.push('<li><b>' + itemName(g.item) + '</b> ให้ ' + giftHTML(g) + ' · อยู่ในรายการของคุณแล้ว</li>'); });
   box.className = 'result taken';
   box.innerHTML = '<div class="head">' + (m.fund.length ? '<span class="pill fund">กองกลางให้แล้ว</span>' : '') +
-    (m.orders.length || m.cart.length ? '<span class="pill warn">มีคนสั่งแล้ว</span>' : '') + '</div><ul>' + lines.join('') + '</ul>' +
+    (m.orders.length || m.cart.length ? '<span class="pill warn">มีคนสั่งแล้ว</span>' : '') + '</div><ul>' + lines.join('') + '</ul>' + otherLines +
     '<div class="hint">ยังสั่งเพิ่มได้ แต่ถ้าเป็นของชิ้นเดียวกัน แนะนำคุยกันในกลุ่มก่อน</div>';
   if (hasItem(m, 'hood')) $('addHood').firstChild.textContent = '+ Hood (มีแล้ว)';
   if (hasItem(m, 'tee')) $('addTee').firstChild.textContent = '+ เสื้อยืด (มีแล้ว)';
 }
 function addGift(item) {
-  var raw = $('teacher').value.trim(); if (teacherKey(raw).length < 2) return;
-  var m = teacherMatches(raw), btn = $(item === 'hood' ? 'addHood' : 'addTee');
+  var raw = $('teacher').value.trim(), dept = $('dept').value.trim();
+  if (teacherKey(raw).length < 2 || !deptKey(dept)) return;
+  var m = teacherMatches(raw, dept), btn = $(item === 'hood' ? 'addHood' : 'addTee');
   if (hasItem(m, item) && armed !== item) {
     armed = item;
     btn.classList.add('confirm');
@@ -709,27 +725,28 @@ function addGift(item) {
     return;
   }
   if (S.gifts.length >= 10) return;
-  S.gifts.push({ teacher: raw, item: item });
-  $('teacher').value = '';
+  S.gifts.push({ teacher: raw, dept: dept, item: item });
+  $('teacher').value = ''; $('dept').value = '';
   renderTeacher(); update();
 }
 function renderGifts() {
   $('giftList').innerHTML = S.gifts.map(function (g, i) {
-    return '<div class="giftrow"><span><b>' + itemName(g.item) + '</b> ให้ ' + esc(g.teacher) + ' <span class="hint">· ' +
+    return '<div class="giftrow"><span><b>' + itemName(g.item) + '</b> ให้ ' + giftHTML(g) + ' <span class="hint">· ' +
       (g.item === 'hood' ? '290 ฿' : 'ราคาตามไซส์ครู') + '</span></span><button type="button" class="x" data-i="' + i + '" aria-label="ลบ">ลบ</button></div>';
   }).join('');
 }
 function renderClaimed() {
-  var groups = {}, order = [];
+  var groups = [];
   R.gifts.forEach(function (g) {
     var k = teacherKey(g.teacher), hit = null;
-    order.forEach(function (o) { if (!hit && sameTeacher(o, k)) hit = o; });
-    if (!hit) { hit = k; order.push(k); groups[k] = { name: g.teacher, items: [] }; }
-    groups[hit].items.push(itemName(g.item));
+    groups.forEach(function (o) { if (!hit && sameTeacher(o.k, k) && deptOk(o.dept, g.dept)) hit = o; });
+    if (!hit) { hit = { k: k, name: g.teacher, dept: g.dept || '', items: [] }; groups.push(hit); }
+    else if (!hit.dept && g.dept) hit.dept = g.dept;
+    hit.items.push(itemName(g.item));
   });
-  if (!order.length) { $('claimed').innerHTML = R.loaded ? '<p class="hint">ยังไม่มีใครสั่งของให้ครูเป็นการส่วนตัว</p>' : ''; return; }
-  $('claimed').innerHTML = '<h3>มีคนสั่งให้แล้ว <span class="sub">' + order.length + ' ท่าน · แตะชื่อเพื่อดูรายละเอียด</span></h3><div class="chips">' +
-    order.map(function (k) { var g = groups[k]; return '<button type="button" class="claimed-chip" data-t="' + esc(g.name) + '">' + esc(g.name) + ' <i>' + g.items.join(', ') + '</i></button>'; }).join('') + '</div>';
+  if (!groups.length) { $('claimed').innerHTML = R.loaded ? '<p class="hint">ยังไม่มีใครสั่งของให้ครูเป็นการส่วนตัว</p>' : ''; return; }
+  $('claimed').innerHTML = '<h3>มีคนสั่งให้แล้ว <span class="sub">' + groups.length + ' ท่าน · แตะชื่อเพื่อดูรายละเอียด</span></h3><div class="chips">' +
+    groups.map(function (g) { return '<button type="button" class="claimed-chip" data-t="' + esc(g.name) + '" data-d="' + esc(g.dept) + '">' + giftHTML(g) + ' <i>' + g.items.join(', ') + '</i></button>'; }).join('') + '</div>';
 }
 
 /* ---------- remote ---------- */
@@ -755,7 +772,7 @@ function slipHTML(o, c, withWho) {
   HOOD.forEach(function (r) { var n = o.hood[r[0]]; if (n) L.push(['Hood ' + r[0] + ' × ' + n, baht(n * HOOD_PRICE)]); });
   TEE.forEach(function (r) { var n = o.tee[r[0]]; if (n) L.push(['เสื้อยืด ' + r[0] + ' × ' + n, baht(n * r[2])]); });
   if (o.umbrella) L.push(['ร่ม × ' + o.umbrella, baht(o.umbrella * UMB_PRICE)]);
-  o.gifts.forEach(function (g) { L.push([itemName(g.item) + ' ให้ ' + g.teacher, g.item === 'hood' ? baht(HOOD_PRICE) : 'ตามไซส์ครู']); });
+  o.gifts.forEach(function (g) { L.push([itemName(g.item) + ' ให้ ' + giftText(g), g.item === 'hood' ? baht(HOOD_PRICE) : 'ตามไซส์ครู']); });
   var h = '<div class="slip num">' + (withWho ? '<div class="who">' + esc(o.name) + ' · ' + esc(normEmail(o.email)) + (o.contact ? ' · ' + esc(o.contact) : '') + '</div>' : '') +
     L.map(function (l) { return '<div class="ln"><span>' + esc(l[0]) + '</span><span>' + l[1] + '</span></div>'; }).join('') +
     '<div class="ln tot"><span>' + (withWho ? 'ยอดครั้งนี้' : 'ยอดรวม') + '</span><span>' + baht(c.total) + '</span></div>';
@@ -814,12 +831,12 @@ function send() {
       openSheet('<div class="done"><div class="big">สั่งเรียบร้อยแล้ว</div></div><div>เลขที่คำสั่งซื้อ <span class="code">' + esc(o.id) + '</span></div>' +
         slipHTML(saved, c, true) + grandHTML(H.orders, 'ทั้งหมดของอีเมลนี้') +
         (dup.length ? '<div class="result taken"><div class="head"><span class="pill warn">แจ้งเตือน</span> มีคนสั่งให้ครูท่านเดียวกันไว้ก่อนแล้ว</div><ul>' +
-          dup.map(function (x) { return '<li>' + itemName(x.item) + ' ให้ ' + esc(x.teacher) + ' · โดย ' + esc(x.by) + '</li>'; }).join('') + '</ul></div>' : '') +
+          dup.map(function (x) { return '<li>' + itemName(x.item) + ' ให้ ' + giftHTML(x) + ' · โดย ' + esc(x.by) + '</li>'; }).join('') + '</ul></div>' : '') +
         '<p class="hint">แคปหน้าจอนี้เก็บไว้ได้ กรรมการจะสรุปยอดและแจ้งช่องทางชำระเงินให้ภายหลัง ต้องการแก้ไขแจ้งกรรมการพร้อมเลขที่คำสั่งซื้อ · สั่งเพิ่มได้ด้วยอีเมลเดิม</p>' +
         '<div class="actions"><button type="button" class="btn ghost" id="again">เสร็จสิ้น</button><button type="button" class="btn sunbtn" id="toPay">แนบสลิปโอนเงิน</button></div>');
       S = blank(sent);
       $('note').value = '';
-      if (!d.repeat) R.gifts = R.gifts.concat(sent.gifts.map(function (g) { return { teacher: g.teacher, item: g.item, by: o.name, ts: o.ts }; }));
+      if (!d.repeat) R.gifts = R.gifts.concat(sent.gifts.map(function (g) { return { teacher: g.teacher, dept: g.dept || '', item: g.item, by: o.name, ts: o.ts }; }));
       renderClaimed(); renderTeacher(); update(); renderHistory(); refresh();
     })
     .catch(function (e) {
@@ -846,12 +863,13 @@ function send() {
   $('contact').addEventListener('input', function () { S.contact = this.value; store('wsc21-draft', S); });
   $('note').addEventListener('input', function () { S.note = this.value; store('wsc21-draft', S); });
   $('teacher').addEventListener('input', renderTeacher);
+  $('dept').addEventListener('input', renderTeacher);
   $('teacher').addEventListener('focus', refresh);
-  $('teacher').addEventListener('keydown', function (e) { if (e.key === 'Enter') e.preventDefault(); });
+  ['teacher', 'dept'].forEach(function (id) { $(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') e.preventDefault(); }); });
   $('addHood').addEventListener('click', function () { addGift('hood'); });
   $('addTee').addEventListener('click', function () { addGift('tee'); });
   $('giftList').addEventListener('click', function (e) { var b = e.target.closest('button[data-i]'); if (!b) return; S.gifts.splice(Number(b.getAttribute('data-i')), 1); update(); renderTeacher(); });
-  $('claimed').addEventListener('click', function (e) { var b = e.target.closest('button[data-t]'); if (!b) return; $('teacher').value = b.getAttribute('data-t'); renderTeacher(); $('teacher').scrollIntoView({ block: 'center', behavior: 'smooth' }); });
+  $('claimed').addEventListener('click', function (e) { var b = e.target.closest('button[data-t]'); if (!b) return; $('teacher').value = b.getAttribute('data-t'); $('dept').value = b.getAttribute('data-d') || ''; renderTeacher(); $('teacher').scrollIntoView({ block: 'center', behavior: 'smooth' }); });
   $('review').addEventListener('click', review);
   $('payFile').addEventListener('change', pickSlip);
   $('payAmount').addEventListener('input', function () { P.amountTouched = true; payReady(); });

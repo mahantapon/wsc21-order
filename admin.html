@@ -171,6 +171,9 @@ function when(iso) { try { return new Date(iso).toLocaleString('th-TH', { day: '
 function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 function ss(k, v) { try { if (v === undefined) return sessionStorage.getItem(k) || ''; if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { return ''; } }
 function itemName(i) { return i === 'tee' ? 'เสื้อยืด' : 'Hood'; }
+function deptKey(s) { return String(s || '').toLowerCase().replace(/^\s*(แผนก|ฝ่าย|ระดับ|ชั้น)\s*/, '').replace(/[\s.\-_,()'"\u0e4c\u200b-\u200d]/g, ''); }
+function deptOk(a, b) { a = deptKey(a); b = deptKey(b); if (!a || !b) return true; return a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0; }
+function giftText(g) { return g.teacher + (g.dept ? ' (' + g.dept + ')' : ''); }
 function teacherKey(s) {
   return String(s || '').toLowerCase()
     .replace(/^\s*(คุณครู|ครู|คุณ|อาจารย์|อ\.|มิส|teacher|tr\.?|t\.|miss|mrs\.?|mr\.?|ms\.?)\s*/i, '')
@@ -244,7 +247,7 @@ function lines(o) {
   D.hoodSizes.forEach(function (s) { var n = (o.hood || {})[s]; if (n) L.push(['Hood ' + s + ' × ' + n, n * P.hood]); });
   D.teeSizes.forEach(function (s) { var n = (o.tee || {})[s]; if (n) L.push(['เสื้อยืด ' + s + ' × ' + n, n * P.tee[s]]); });
   if (o.umbrella) L.push(['ร่ม × ' + o.umbrella, o.umbrella * P.umbrella]);
-  (o.gifts || []).forEach(function (g) { L.push([itemName(g.item) + ' ให้' + g.teacher, g.item === 'hood' ? P.hood : 'รอยืนยันไซส์']); });
+  (o.gifts || []).forEach(function (g) { L.push([itemName(g.item) + ' ให้' + giftText(g), g.item === 'hood' ? P.hood : 'รอยืนยันไซส์']); });
   return L;
 }
 function billText(h) {
@@ -297,16 +300,17 @@ function render() {
   var groups = [];
   O.forEach(function (o) { (o.gifts || []).forEach(function (g) {
     var k = teacherKey(g.teacher), hit = null;
-    groups.forEach(function (x) { if (!hit && sameTeacher(x.k, k)) hit = x; });
-    if (!hit) { hit = { k: k, name: g.teacher, list: [] }; groups.push(hit); }
-    hit.list.push({ item: g.item, by: o.name, id: o.id, raw: g.teacher });
+    groups.forEach(function (x) { if (!hit && sameTeacher(x.k, k) && deptOk(x.dept, g.dept)) hit = x; });
+    if (!hit) { hit = { k: k, name: g.teacher, dept: g.dept || '', list: [] }; groups.push(hit); }
+    else if (!hit.dept && g.dept) hit.dept = g.dept;
+    hit.list.push({ item: g.item, by: o.name, id: o.id, raw: giftText(g) });
   }); });
   $('gifts').innerHTML = groups.length ? groups.map(function (x) {
     var fund = D.central.some(function (c) { return sameTeacher(x.k, teacherKey(c)); });
     var hoods = x.list.filter(function (l) { return l.item === 'hood'; }).length, tees = x.list.length - hoods;
     var flag = (fund && hoods ? '<span class="pill fund">กองกลางให้ Hood แล้ว</span> ' : '') + (hoods > 1 || tees > 1 ? '<span class="pill warn">ซ้ำ</span>' : '');
-    return '<div class="gift"><span class="tn">' + esc(x.name) + '</span>' + flag + '<span>' + x.list.map(function (l) {
-      return itemName(l.item) + ' · ' + esc(l.by) + ' (' + esc(l.id) + (l.raw !== x.name ? ', พิมพ์ว่า "' + esc(l.raw) + '"' : '') + ')';
+    return '<div class="gift"><span class="tn">' + esc(x.name) + (x.dept ? ' <span class="hint">(' + esc(x.dept) + ')</span>' : '') + '</span>' + flag + '<span>' + x.list.map(function (l) {
+      return itemName(l.item) + ' · ' + esc(l.by) + ' (' + esc(l.id) + (l.raw !== giftText(x) ? ', พิมพ์ว่า "' + esc(l.raw) + '"' : '') + ')';
     }).join(' · ') + '</span></div>';
   }).join('') : '<p class="hint">ยังไม่มีคนสั่งของให้ครู</p>';
 
@@ -386,7 +390,7 @@ $('copyAll').addEventListener('click', function () {
   var rows = D.orders.map(function (o) {
     return [o.id, when(o.ts), o.name, o.email, o.contact || '', o.hoodFree || ''].concat(
       D.hoodSizes.map(function (s) { return (o.hood || {})[s] || ''; }), D.teeSizes.map(function (s) { return (o.tee || {})[s] || ''; }),
-      [o.umbrella || '', (o.gifts || []).map(function (g) { return itemName(g.item) + 'ให้' + g.teacher; }).join(', '), o.total, o.note || '']);
+      [o.umbrella || '', (o.gifts || []).map(function (g) { return itemName(g.item) + 'ให้' + giftText(g); }).join(', '), o.total, o.note || '']);
   });
   var all = [head].concat(rows);
   if ((D.slips || []).length) {
