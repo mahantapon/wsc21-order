@@ -675,6 +675,7 @@ function pickSlip() {
   var f = $('payFile').files && $('payFile').files[0];
   $('payErr').hidden = true; $('payOk').hidden = true;
   if (!f) return;
+  P.image = ''; payReady();   // the old picture must not go out while the new one is still being prepared
   $('payPickText').textContent = 'กำลังเตรียมรูป…';
   shrink(f).then(function (data) {
     P.image = data; P.cid = newCid();
