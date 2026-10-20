@@ -280,7 +280,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
   </section>
 
   <section class="card" aria-labelledby="h-hood">
-    <h2 id="h-hood">เสื้อ Hood <span class="price">ตัวเพิ่ม 290 ฿</span></h2>
+    <h2 id="h-hood">เสื้อ Hood <span class="price">ตัวแรกฟรี · ตัวต่อไป 290 ฿</span></h2>
     <div class="photo"><img src="img/hood.jpg" width="1100" height="875" alt="แบบเสื้อ Hood สีครีม หน้าอกปัก 21st หลัง NO limit #wscรุ่น21"></div>
     <details class="chart">
       <summary>ตารางไซส์ Hood (นิ้ว)</summary>
@@ -288,11 +288,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     </details>
     <p class="hint">ควรสั่งใหญ่กว่ารอบอกที่วัดได้จริง 8–10 นิ้ว เผื่อผ้าหดและเผื่อโต</p>
 
-    <h3>ตัวของน้อง <span class="sub">ฟรี บ้านละ 1 ตัว (งบกองกลาง) · เลือกไซส์</span></h3>
-    <div class="freeused" id="freeUsed" hidden></div>
-    <div class="chips" id="freeChips" role="radiogroup" aria-label="ไซส์ Hood ตัวฟรีของน้อง"></div>
-
-    <h3>สั่งเพิ่ม <span class="sub">290 บาท/ตัว ทุกไซส์ราคาเดียวกัน</span></h3>
+    <div class="freeused" id="hoodNote"></div>
     <div class="rows" id="hoodRows"></div>
   </section>
 
@@ -367,7 +363,7 @@ var TEE_PRICE = {}; TEE.forEach(function (t) { TEE_PRICE[t[0]] = t[2]; });
 var CENTRAL = ['ครูไอซ์', 'ครูต่อ', 'ครูฟิน', 'ครูแซนดี้', 'ครูเปิ้ล'];
 var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function blank(keep) { return { name: keep ? keep.name : '', email: keep ? keep.email : '', contact: keep ? keep.contact : '', hoodFree: '', hood: {}, tee: {}, umbrella: 0, gifts: [], note: '' }; }
+function blank(keep) { return { name: keep ? keep.name : '', email: keep ? keep.email : '', contact: keep ? keep.contact : '', hoodFirst: '', hood: {}, tee: {}, umbrella: 0, gifts: [], note: '' }; }
 var S = blank();
 var R = { gifts: [], orderers: [], closed: Date.now() > CLOSE_AT.getTime(), loaded: false };
 var H = { email: '', orders: [], slips: [], loading: false }; // this parent's earlier orders and slips
@@ -427,14 +423,6 @@ function buildHoodChart() {
   HOOD.forEach(function (r) { h += '<tr><td><b>' + r[0] + '</b></td><td>' + r[1] + '″</td><td>' + r[2] + '″</td><td>' + r[3] + '″</td></tr>'; });
   $('hoodChart').innerHTML = h + '</tbody>';
 }
-function buildFreeChips() {
-  var opts = [['', 'ไม่รับ', '']].concat(HOOD.map(function (r) { return [r[0], r[0], 'อก ' + r[1] + '″']; }));
-  $('freeChips').innerHTML = opts.map(function (o, i) {
-    return '<label class="chip"><input type="radio" name="free" id="free' + i + '" value="' + o[0] + '"' + (S.hoodFree === o[0] ? ' checked' : '') +
-      '><span><b>' + o[1] + '</b>' + (o[2] ? '<i>' + o[2] + '</i>' : '<i>&nbsp;</i>') + '</span></label>';
-  }).join('');
-  $('freeChips').addEventListener('change', function (e) { S.hoodFree = e.target.value; update(); });
-}
 function stepper(kind, size, n) {
   return '<div class="stepper" data-kind="' + kind + '" data-size="' + esc(size) + '">' +
     '<button type="button" data-d="-1" aria-label="ลด ' + esc(size) + '"' + (n <= 0 ? ' disabled' : '') + '>−</button>' +
@@ -443,7 +431,7 @@ function stepper(kind, size, n) {
 }
 function buildRows() {
   $('hoodRows').innerHTML = HOOD.map(function (r) {
-    return '<div class="row" id="hood-' + r[0] + '"><div class="sz">' + r[0] + '</div><div class="meta num">อก ' + r[1] + '″ · ยาว ' + r[2] + '″<br><b>290 ฿</b></div>' +
+    return '<div class="row" id="hood-' + r[0] + '"><div class="sz">' + r[0] + '</div><div class="meta num">อก ' + r[1] + '″ · ยาว ' + r[2] + '″</div>' +
       stepper('hood', r[0], 0) + '<div class="sum num">–</div></div>';
   }).join('');
   $('teeRows').innerHTML = TEE.map(function (r) {
@@ -458,6 +446,7 @@ function buildRows() {
       var st = b.parentNode, kind = st.getAttribute('data-kind'), size = st.getAttribute('data-size'), d = Number(b.getAttribute('data-d'));
       if (kind === 'umb') S.umbrella = Math.max(0, Math.min(50, S.umbrella + d));
       else { var m = S[kind]; m[size] = Math.max(0, Math.min(MAX, (m[size] || 0) + d)); if (!m[size]) delete m[size]; }
+      if (kind === 'hood' && (!S.hoodFirst || !S.hood[S.hoodFirst])) S.hoodFirst = S.hood[size] ? size : '';
       update();
     });
   });
@@ -494,7 +483,7 @@ function itemsText(o) {
   var parts = [];
   if (o.hoodFree) parts.push('Hood ฟรี ' + o.hoodFree);
   var h = HOOD.filter(function (r) { return o.hood[r[0]]; }).map(function (r) { return r[0] + '×' + o.hood[r[0]]; });
-  if (h.length) parts.push('Hood เพิ่ม ' + h.join(', '));
+  if (h.length) parts.push('Hood ' + h.join(', '));
   var t = TEE.filter(function (r) { return o.tee[r[0]]; }).map(function (r) { return r[0] + '×' + o.tee[r[0]]; });
   if (t.length) parts.push('เสื้อยืด ' + t.join(', '));
   if (o.umbrella) parts.push('ร่ม ' + o.umbrella);
@@ -510,18 +499,31 @@ function setRow(id, n, sum) {
   row.querySelector('.sum').textContent = n > 0 ? baht(sum) : '–';
 }
 function freeUsedBy() { return H.orders.filter(function (o) { return o.hoodFree; })[0] || null; }
+// the first hood of the house is free: it goes to the size tapped first, the rest are 290 each
+function freeSize(o) {
+  if (freeUsedBy()) return '';
+  if (o.hoodFirst && o.hood[o.hoodFirst]) return o.hoodFirst;
+  var r = HOOD.filter(function (x) { return o.hood[x[0]]; })[0];
+  return r ? r[0] : '';
+}
+function priced(o) {
+  var f = freeSize(o), extra = {};
+  Object.keys(o.hood || {}).forEach(function (k) { var n = o.hood[k] - (k === f ? 1 : 0); if (n > 0) extra[k] = n; });
+  return { name: o.name, email: o.email, contact: o.contact, note: o.note, hoodFree: f, hood: extra, tee: o.tee, umbrella: o.umbrella, gifts: o.gifts };
+}
 function update() {
-  var used = freeUsedBy();
-  if (used && S.hoodFree) S.hoodFree = '';
-  document.querySelectorAll('#freeChips input').forEach(function (i) { i.disabled = !!used && i.value !== ''; i.checked = i.value === S.hoodFree; });
-  $('freeUsed').hidden = !used;
-  if (used) $('freeUsed').textContent = 'อีเมลนี้รับ Hood ฟรีไปแล้ว ไซส์ ' + used.hoodFree + ' (คำสั่ง ' + used.id + ') ถ้าต้องการเพิ่มเลือกในช่องสั่งเพิ่มด้านล่าง';
-  HOOD.forEach(function (r) { var n = S.hood[r[0]] || 0; setRow('hood-' + r[0], n, n * HOOD_PRICE); });
+  var used = freeUsedBy(), f = freeSize(S);
+  $('hoodNote').textContent = used ? 'อีเมลนี้รับตัวฟรีไปแล้ว (ไซส์ ' + used.hoodFree + ' ในคำสั่ง ' + used.id + ') ตัวที่สั่งเพิ่มคิดตัวละ 290 บาท'
+    : 'ตัวแรกฟรี (งบกองกลาง บ้านละ 1 ตัว) · ตั้งแต่ตัวที่ 2 คิดตัวละ 290 บาท ทุกไซส์';
+  HOOD.forEach(function (r) {
+    var n = S.hood[r[0]] || 0, paid = n - (r[0] === f ? 1 : 0);
+    setRow('hood-' + r[0], n, paid * HOOD_PRICE);
+    if (r[0] === f) $('hood-' + r[0]).querySelector('.sum').textContent = paid ? baht(paid * HOOD_PRICE) + ' +ฟรี 1' : 'ฟรี';
+  });
   TEE.forEach(function (r) { var n = S.tee[r[0]] || 0; setRow('tee-' + r[0], n, n * r[2]); });
   setRow('umb-1', S.umbrella, S.umbrella * UMB_PRICE);
-  var c = calc(), bits = [];
-  if (S.hoodFree) bits.push('Hood ฟรี ' + S.hoodFree);
-  if (c.hoodExtra) bits.push('Hood เพิ่ม ' + c.hoodExtra);
+  var c = calc(priced(S)), bits = [], hoodN = c.hoodExtra + (f ? 1 : 0);
+  if (hoodN) bits.push('Hood ' + hoodN + (f ? ' (ฟรี 1)' : ''));
   if (c.teeN) bits.push('เสื้อยืด ' + c.teeN);
   if (S.umbrella) bits.push('ร่ม ' + S.umbrella);
   if (S.gifts.length) bits.push('ให้ครู ' + S.gifts.length);
@@ -749,7 +751,7 @@ function renderClosing() {
 /* ---------- review & submit ---------- */
 function slipHTML(o, c, withWho) {
   var L = [];
-  if (o.hoodFree) L.push(['Hood ของน้อง ไซส์ ' + o.hoodFree, 'ฟรี']);
+  if (o.hoodFree) L.push(['Hood ' + o.hoodFree + ' × 1 (ตัวฟรี)', 'ฟรี']);
   HOOD.forEach(function (r) { var n = o.hood[r[0]]; if (n) L.push(['Hood ' + r[0] + ' × ' + n, baht(n * HOOD_PRICE)]); });
   TEE.forEach(function (r) { var n = o.tee[r[0]]; if (n) L.push(['เสื้อยืด ' + r[0] + ' × ' + n, baht(n * r[2])]); });
   if (o.umbrella) L.push(['ร่ม × ' + o.umbrella, baht(o.umbrella * UMB_PRICE)]);
@@ -772,7 +774,7 @@ function openSheet(html) { $('panel').innerHTML = html; $('sheet').hidden = fals
 function closeSheet() { $('sheet').hidden = true; document.body.style.overflow = ''; }
 function review() {
   S.name = $('name').value.trim(); S.email = $('email').value.trim(); S.contact = $('contact').value.trim(); S.note = $('note').value.trim();
-  var c = calc(), errs = [];
+  var v = priced(S), c = calc(v), errs = [];
   if (!S.name) errs.push('กรอกชื่อผู้สั่ง');
   if (!EMAIL_RE.test(normEmail(S.email))) errs.push('กรอกอีเมลผู้ปกครองให้ถูกต้อง');
   if (!c.any) errs.push('เลือกสินค้าอย่างน้อย 1 รายการ');
@@ -781,8 +783,8 @@ function review() {
     return;
   }
   var mine = H.email === normEmail(S.email) ? H.orders : [];
-  var after = mine.concat([{ hoodFree: S.hoodFree, hood: S.hood, tee: S.tee, umbrella: S.umbrella, gifts: S.gifts, total: c.total }]);
-  openSheet('<h2 id="sheetTitle">ตรวจสอบรายการ</h2>' + slipHTML(S, c, true) +
+  var after = mine.concat([{ hoodFree: v.hoodFree, hood: v.hood, tee: v.tee, umbrella: v.umbrella, gifts: v.gifts, total: c.total }]);
+  openSheet('<h2 id="sheetTitle">ตรวจสอบรายการ</h2>' + slipHTML(v, c, true) +
     (mine.length ? grandHTML(after, 'รวมกับที่เคยสั่งไว้') : '') +
     '<div class="err" id="sendErr" hidden></div>' +
     '<div class="actions"><button type="button" class="btn ghost" data-close>แก้ไข</button><button type="button" class="btn sunbtn" id="send">ยืนยันสั่งซื้อ</button></div>');
@@ -806,11 +808,11 @@ function send() {
   postOrder(sent, 2)
     .then(function (d) {
       if (!d || !d.ok) throw new Error((d && d.error) || 'ส่งไม่สำเร็จ');
-      var o = d.order, c = calc(sent);
+      var o = d.order, saved = { name: o.name, email: sent.email, contact: sent.contact, note: o.note, hoodFree: o.hoodFree, hood: o.hood, tee: o.tee, umbrella: o.umbrella, gifts: o.gifts || [] }, c = calc(saved);
       var dup = (d.dupes || []).filter(function (x) { return x.by !== o.name; });
       H = { email: normEmail(sent.email), orders: d.orders || [o], slips: d.slips || H.slips || [], loading: false };
       openSheet('<div class="done"><div class="big">สั่งเรียบร้อยแล้ว</div></div><div>เลขที่คำสั่งซื้อ <span class="code">' + esc(o.id) + '</span></div>' +
-        slipHTML(sent, c, true) + grandHTML(H.orders, 'ทั้งหมดของอีเมลนี้') +
+        slipHTML(saved, c, true) + grandHTML(H.orders, 'ทั้งหมดของอีเมลนี้') +
         (dup.length ? '<div class="result taken"><div class="head"><span class="pill warn">แจ้งเตือน</span> มีคนสั่งให้ครูท่านเดียวกันไว้ก่อนแล้ว</div><ul>' +
           dup.map(function (x) { return '<li>' + itemName(x.item) + ' ให้ ' + esc(x.teacher) + ' · โดย ' + esc(x.by) + '</li>'; }).join('') + '</ul></div>' : '') +
         '<p class="hint">แคปหน้าจอนี้เก็บไว้ได้ กรรมการจะสรุปยอดและแจ้งช่องทางชำระเงินให้ภายหลัง ต้องการแก้ไขแจ้งกรรมการพร้อมเลขที่คำสั่งซื้อ · สั่งเพิ่มได้ด้วยอีเมลเดิม</p>' +
@@ -831,11 +833,12 @@ function send() {
 (function init() {
   var d = load('wsc21-draft');
   if (d && typeof d === 'object') {
-    S = blank(d); S.note = d.note || ''; S.hoodFree = d.hoodFree || '';
+    S = blank(d); S.note = d.note || ''; S.hoodFirst = d.hoodFirst || d.hoodFree || '';
     S.hood = d.hood || {}; S.tee = d.tee || {}; S.umbrella = d.umbrella || 0; S.gifts = Array.isArray(d.gifts) ? d.gifts : []; S.cid = d.cid || '';
+    if (d.hoodFree) S.hood[d.hoodFree] = (S.hood[d.hoodFree] || 0) + 1;
   }
   $('name').value = S.name; $('email').value = S.email; $('contact').value = S.contact; $('note').value = S.note;
-  buildHoodChart(); buildFreeChips(); buildRows(); renderClosing(); update(); renderTeacher();
+  buildHoodChart(); buildRows(); renderClosing(); update(); renderTeacher();
   if (S.email) lookupEmail();
   $('name').addEventListener('input', function () { S.name = this.value; checkName(); store('wsc21-draft', S); });
   $('email').addEventListener('input', onEmail);

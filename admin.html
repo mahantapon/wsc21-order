@@ -279,7 +279,7 @@ function render() {
     return '<div class="kpi"><b>' + k[0] + '</b><strong class="num">' + k[1] + '</strong></div>';
   }).join('');
 
-  var th = '<thead><tr><th>Hood</th><th>ฟรี (น้อง)</th><th>สั่งเพิ่ม</th><th>รวม</th></tr></thead><tbody>', a = 0, b = 0;
+  var th = '<thead><tr><th>Hood</th><th>ตัวฟรี</th><th>สั่งเพิ่ม</th><th>รวม</th></tr></thead><tbody>', a = 0, b = 0;
   D.hoodSizes.forEach(function (s) { var f = hoodFree[s] || 0, x = hoodExtra[s] || 0; a += f; b += x;
     th += '<tr><td><b>' + s + '</b></td><td class="' + (f ? '' : 'zero') + '">' + f + '</td><td class="' + (x ? '' : 'zero') + '">' + x + '</td><td class="' + (f + x ? '' : 'zero') + '"><b>' + (f + x) + '</b></td></tr>'; });
   th += '<tr class="tot"><td>รวม</td><td>' + a + '</td><td>' + b + '</td><td>' + (a + b) + '</td></tr></tbody>';
