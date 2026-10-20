@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>หลังบ้าน NO limit 21</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Mali:wght@600;700&display=swap">
+<style>
+/* Layout: committee desk — summary for the supplier first, then one card per household (email), then teacher gifts */
+:root {
+  --bg: #f4efe4; --surface: #fffdf7; --ink: #1b2559; --muted: #5d6488; --line: #e2d9c6; --chip: #efe7d5;
+  --sun: #f2b705; --sun-ink: #2a2100; --sky: #1c8fcb; --coral: #c8402f; --ok: #1d7f53;
+  --warn-bg: #fff3d1; --bad-bg: #fde6e1; --ok-bg: #e2f3e9; --info-bg: #e3f1fa;
+  --shadow: 0 1px 0 rgba(27,37,89,.06), 0 8px 24px -12px rgba(27,37,89,.25);
+  --f-display: "Mali", "IBM Plex Sans Thai", "Thonburi", sans-serif;
+  --f-body: "IBM Plex Sans Thai", "Thonburi", "Sukhumvit Set", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1330; --surface: #171f45; --ink: #f2ede2; --muted: #a8afce; --line: #2b3567; --chip: #222b59;
+    --sun: #f5c542; --sun-ink: #241c00; --sky: #5ab6e8; --coral: #f17b6c; --ok: #5cc993;
+    --warn-bg: #3a3112; --bad-bg: #3d1c1a; --ok-bg: #12321f; --info-bg: #13304a;
+    --shadow: 0 1px 0 rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.8);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1330; --surface: #171f45; --ink: #f2ede2; --muted: #a8afce; --line: #2b3567; --chip: #222b59;
+  --sun: #f5c542; --sun-ink: #241c00; --sky: #5ab6e8; --coral: #f17b6c; --ok: #5cc993;
+  --warn-bg: #3a3112; --bad-bg: #3d1c1a; --ok-bg: #12321f; --info-bg: #13304a;
+  --shadow: 0 1px 0 rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.8);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px)); }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--sky); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1000px; margin: 0 auto; display: grid; gap: 18px; padding-top: calc(20px + env(safe-area-inset-top, 0px)); }
+h1 { font-family: var(--f-display); font-size: 28px; margin: 0; line-height: 1.2; }
+h2 { font-family: var(--f-display); font-size: 21px; margin: 0; line-height: 1.25; }
+.top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.top .who { color: var(--muted); font-size: 13.5px; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 0; border-radius: 10px; padding: 9px 14px; font-weight: 700; cursor: pointer; background: var(--surface); border: 1.5px solid var(--line); }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.sun { background: var(--sun); color: var(--sun-ink); border-color: var(--sun); }
+.btn.small { padding: 5px 10px; font-size: 13px; border-radius: 8px; }
+.btn.danger { color: var(--coral); }
+.btn.danger.armed { background: var(--coral); color: #fff; border-color: var(--coral); }
+.card { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 18px 16px; display: grid; gap: 12px; min-width: 0; }
+.login { max-width: 380px; margin: 8vh auto 0; }
+label.field { display: grid; gap: 6px; font-weight: 600; }
+input[type=text], input[type=password], input[type=search] { width: 100%; border: 1.5px solid var(--line); background: var(--bg); border-radius: 10px; padding: 10px 12px; font-size: 16px; }
+.err { background: var(--bad-bg); border-radius: 10px; padding: 10px 12px; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.kpi { background: var(--surface); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); display: grid; gap: 2px; min-width: 0; }
+.kpi b { font-size: 12.5px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
+.kpi strong { font-family: var(--f-display); font-size: 26px; line-height: 1.15; }
+@media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+tr.tot td { font-weight: 700; border-top: 1.5px solid var(--ink); border-bottom: 0; }
+td.zero { color: var(--muted); opacity: .6; }
+.hint { color: var(--muted); font-size: 13px; }
+.houses { display: grid; gap: 12px; }
+.house { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 14px; display: grid; gap: 8px; min-width: 0; }
+.house .hd { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; align-items: baseline; }
+.house .nm { font-weight: 700; font-size: 16px; }
+.house .em { color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }
+.house .amt { font-family: var(--f-display); font-size: 22px; }
+.ord { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; gap: 4px 10px; align-items: start; border-top: 1px dashed var(--line); padding-top: 8px; }
+.ord .id { font-weight: 700; color: var(--sky); }
+.ord .items { min-width: 0; overflow-wrap: anywhere; }
+.ord .items small { display: block; color: var(--muted); }
+.ord .t { font-weight: 600; text-align: right; }
+.pill { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 1px 9px; white-space: nowrap; display: inline-block; }
+.pill.warn { background: var(--sun); color: var(--sun-ink); }
+.pill.fund { background: var(--sky); color: #fff; }
+.pill.ok { background: var(--ok); color: var(--surface); }
+.gift { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.gift .tn { font-weight: 700; min-width: 110px; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg);
+  padding: 8px 16px; border-radius: 999px; font-weight: 600; z-index: 30; }
+textarea.copybuf { position: fixed; left: -9999px; top: 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <section class="card login" id="loginCard">
+    <h1>หลังบ้าน</h1>
+    <p class="hint">สำหรับกรรมการ ดูคำสั่งซื้อเสื้อ Hood · เสื้อยืด · ร่ม รุ่น 21</p>
+    <form id="loginForm" class="card" style="box-shadow:none;padding:0">
+      <label class="field" for="user">ชื่อผู้ใช้<input type="text" id="user" autocomplete="username" autocapitalize="none"></label>
+      <label class="field" for="pass">รหัสผ่าน<input type="password" id="pass" autocomplete="current-password"></label>
+      <div class="err" id="loginErr" hidden></div>
+      <button class="btn primary" type="submit" id="loginBtn">เข้าสู่ระบบ</button>
+    </form>
+  </section>
+
+  <div id="dash" hidden>
+    <div class="wrap" style="padding-top:0">
+      <div class="top">
+        <div><h1>หลังบ้าน · NO limit 21</h1><div class="who num" id="stamp"></div></div>
+        <div class="tools">
+          <button class="btn" id="reload" type="button">รีเฟรช</button>
+          <button class="btn sun" id="copyAll" type="button">คัดลอกทั้งหมดไป Google Sheets</button>
+          <button class="btn" id="logout" type="button">ออกจากระบบ</button>
+        </div>
+      </div>
+      <div class="kpis" id="kpis"></div>
+
+      <section class="card">
+        <h2>ยอดสั่งผลิต</h2>
+        <p class="hint">ใช้ส่งให้ supplier · Hood รวมตัวฟรีของน้องและตัวที่สั่งเพิ่ม · ของขวัญครูยังไม่มีไซส์ (กรรมการไปถามครู)</p>
+        <div class="grid2">
+          <div class="tablewrap"><table class="num" id="tHood"></table></div>
+          <div class="tablewrap"><table class="num" id="tTee"></table></div>
+        </div>
+        <div id="otherTotals"></div>
+      </section>
+
+      <section class="card">
+        <h2>ของขวัญให้ครู</h2>
+        <div id="gifts"></div>
+      </section>
+
+      <section class="card">
+        <div class="top"><h2>รายบ้าน (ตามอีเมล)</h2>
+          <input type="search" id="q" placeholder="ค้นหาชื่อ / อีเมล / เลขที่" style="max-width:280px"></div>
+        <div class="houses" id="houses"></div>
+      </section>
+    </div>
+  </div>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+var API = 'https://script.google.com/macros/s/AKfycbzKnFJLyZAMiZ4j46yJvun-DkF8fx2AbNIkvEboz5PvzCaR3iLZCGfJU9PH9yimCbNhLQ/exec';
+var D = null, token = '';
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function baht(n) { return (n || 0).toLocaleString('th-TH') + ' ฿'; }
+function when(iso) { try { return new Date(iso).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function ss(k, v) { try { if (v === undefined) return sessionStorage.getItem(k) || ''; if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { return ''; } }
+function itemName(i) { return i === 'tee' ? 'เสื้อยืด' : 'Hood'; }
+function teacherKey(s) {
+  return String(s || '').toLowerCase()
+    .replace(/^\s*(คุณครู|ครู|คุณ|อาจารย์|อ\.|มิส|teacher|tr\.?|t\.|miss|mrs\.?|mr\.?|ms\.?)\s*/i, '')
+    .replace(/[\s.\-_,()'"]/g, '').replace(/[์​-‍]/g, '');
+}
+function sameTeacher(a, b) { if (!a || !b) return false; if (a === b) return true; return Math.min(a.length, b.length) >= 3 && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0); }
+
+function call(url, opts, key, tries) {
+  tries = tries == null ? 2 : tries;
+  return fetch(url, opts).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) { if (!d || (d.ok !== false && key && !(key in d))) throw new Error('ตอบกลับไม่ครบ'); return d; })
+    .catch(function (e) { if (tries <= 0) throw e; return wait(1200).then(function () { return call(url, opts, key, tries - 1); }); });
+}
+function post(body, key) { return call(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) }, key); }
+function toast(t) { var el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, 2200); }
+function copy(text) {
+  var done = function () { toast('คัดลอกแล้ว'); };
+  var fallback = function () { var ta = document.createElement('textarea'); ta.className = 'copybuf'; ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { toast('คัดลอกไม่ได้'); } ta.remove(); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+}
+
+/* ---------- auth ---------- */
+$('loginForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var btn = $('loginBtn'); btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ…'; $('loginErr').hidden = true;
+  post({ action: 'login', user: $('user').value, pass: $('pass').value }, 'token').then(function (d) {
+    if (!d.ok) throw new Error(d.error);
+    token = d.token; ss('wsc21-token', token); $('pass').value = '';
+    return loadData();
+  }).catch(function (err) { $('loginErr').hidden = false; $('loginErr').textContent = err.message; })
+    .then(function () { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; });
+});
+function logout() { token = ''; ss('wsc21-token', null); D = null; $('dash').hidden = true; $('loginCard').hidden = false; }
+$('logout').addEventListener('click', logout);
+
+function loadData() {
+  return call(API + '?action=admin&token=' + encodeURIComponent(token), { cache: 'no-store' }, 'orders').then(function (d) {
+    if (!d.ok) { if (d.error === 'AUTH') { logout(); throw new Error('หมดเวลาเข้าสู่ระบบ กรุณาเข้าใหม่'); } throw new Error(d.error); }
+    D = d; $('loginCard').hidden = true; $('dash').hidden = false; render();
+  });
+}
+$('reload').addEventListener('click', function () { loadData().then(function () { toast('อัปเดตแล้ว'); }).catch(function (e) { toast(e.message); }); });
+
+/* ---------- render ---------- */
+function houses() {
+  var map = {}, list = [];
+  D.orders.forEach(function (o) {
+    if (!map[o.email]) { map[o.email] = { email: o.email, names: [], contacts: [], orders: [], total: 0 }; list.push(map[o.email]); }
+    var h = map[o.email];
+    if (h.names.indexOf(o.name) < 0) h.names.push(o.name);
+    if (o.contact && h.contacts.indexOf(o.contact) < 0) h.contacts.push(o.contact);
+    h.orders.push(o); h.total += o.total || 0;
+  });
+  return list;
+}
+function lines(o) {
+  var P = D.prices, L = [];
+  if (o.hoodFree) L.push(['Hood ของน้อง ไซส์ ' + o.hoodFree, 'ฟรี']);
+  D.hoodSizes.forEach(function (s) { var n = (o.hood || {})[s]; if (n) L.push(['Hood ' + s + ' × ' + n, n * P.hood]); });
+  D.teeSizes.forEach(function (s) { var n = (o.tee || {})[s]; if (n) L.push(['เสื้อยืด ' + s + ' × ' + n, n * P.tee[s]]); });
+  if (o.umbrella) L.push(['ร่ม × ' + o.umbrella, o.umbrella * P.umbrella]);
+  (o.gifts || []).forEach(function (g) { L.push([itemName(g.item) + ' ให้' + g.teacher, g.item === 'hood' ? P.hood : 'รอยืนยันไซส์']); });
+  return L;
+}
+function billText(h) {
+  var t = 'สรุปยอดสั่งเสื้อ NO limit รุ่น 21\nคุณ ' + h.names.join(' / ') + '\n';
+  var pending = 0;
+  h.orders.forEach(function (o) {
+    lines(o).forEach(function (l) { t += '- ' + l[0] + ' = ' + (typeof l[1] === 'number' ? l[1].toLocaleString('th-TH') + ' บาท' : l[1]) + '\n'; });
+    pending += o.giftTeePending || 0;
+  });
+  t += 'รวม ' + h.total.toLocaleString('th-TH') + ' บาท';
+  if (pending) t += ' (+ เสื้อยืดให้ครู ' + pending + ' ตัว คิดตามไซส์ที่ได้)';
+  return t;
+}
+function render() {
+  var O = D.orders, P = D.prices, H = houses();
+  $('stamp').textContent = 'ข้อมูล ณ ' + when(D.now) + ' · ปิดรับ ' + when(D.closeAt);
+  var pieces = 0, money = 0;
+  var hoodFree = {}, hoodExtra = {}, tee = {}, umb = 0, giftHood = 0, giftTee = 0;
+  O.forEach(function (o) {
+    money += o.total || 0;
+    if (o.hoodFree) { hoodFree[o.hoodFree] = (hoodFree[o.hoodFree] || 0) + 1; pieces++; }
+    Object.keys(o.hood || {}).forEach(function (s) { hoodExtra[s] = (hoodExtra[s] || 0) + o.hood[s]; pieces += o.hood[s]; });
+    Object.keys(o.tee || {}).forEach(function (s) { tee[s] = (tee[s] || 0) + o.tee[s]; pieces += o.tee[s]; });
+    umb += o.umbrella || 0; pieces += o.umbrella || 0;
+    (o.gifts || []).forEach(function (g) { if (g.item === 'hood') giftHood++; else giftTee++; pieces++; });
+  });
+  $('kpis').innerHTML = [['บ้านที่สั่ง', H.length], ['คำสั่งซื้อ', O.length], ['ชิ้นทั้งหมด', pieces], ['ยอดเงินรวม', baht(money)]].map(function (k) {
+    return '<div class="kpi"><b>' + k[0] + '</b><strong class="num">' + k[1] + '</strong></div>';
+  }).join('');
+
+  var th = '<thead><tr><th>Hood</th><th>ฟรี (น้อง)</th><th>สั่งเพิ่ม</th><th>รวม</th></tr></thead><tbody>', a = 0, b = 0;
+  D.hoodSizes.forEach(function (s) { var f = hoodFree[s] || 0, x = hoodExtra[s] || 0; a += f; b += x;
+    th += '<tr><td><b>' + s + '</b></td><td class="' + (f ? '' : 'zero') + '">' + f + '</td><td class="' + (x ? '' : 'zero') + '">' + x + '</td><td class="' + (f + x ? '' : 'zero') + '"><b>' + (f + x) + '</b></td></tr>'; });
+  th += '<tr class="tot"><td>รวม</td><td>' + a + '</td><td>' + b + '</td><td>' + (a + b) + '</td></tr></tbody>';
+  $('tHood').innerHTML = th;
+  var tt = '<thead><tr><th>เสื้อยืด</th><th>ราคา</th><th>จำนวน</th><th>เป็นเงิน</th></tr></thead><tbody>', n = 0, m = 0;
+  D.teeSizes.forEach(function (s) { var q = tee[s] || 0; n += q; m += q * P.tee[s];
+    tt += '<tr><td><b>' + s + '</b></td><td>' + P.tee[s] + '</td><td class="' + (q ? '' : 'zero') + '">' + q + '</td><td class="' + (q ? '' : 'zero') + '">' + (q * P.tee[s]).toLocaleString('th-TH') + '</td></tr>'; });
+  tt += '<tr class="tot"><td>รวม</td><td></td><td>' + n + '</td><td>' + m.toLocaleString('th-TH') + '</td></tr></tbody>';
+  $('tTee').innerHTML = tt;
+  $('otherTotals').innerHTML = '<div class="kpis">' + [['ร่ม', umb + ' คัน'], ['Hood ให้ครู', giftHood + ' ตัว (รอไซส์)'], ['เสื้อยืดให้ครู', giftTee + ' ตัว (รอไซส์)'], ['Hood ทั้งหมด', (a + b + giftHood) + ' ตัว']].map(function (k) {
+    return '<div class="kpi" style="box-shadow:none;background:var(--bg)"><b>' + k[0] + '</b><strong class="num" style="font-size:20px">' + k[1] + '</strong></div>';
+  }).join('') + '</div>';
+
+  // teacher gifts grouped by teacher
+  var groups = [];
+  O.forEach(function (o) { (o.gifts || []).forEach(function (g) {
+    var k = teacherKey(g.teacher), hit = null;
+    groups.forEach(function (x) { if (!hit && sameTeacher(x.k, k)) hit = x; });
+    if (!hit) { hit = { k: k, name: g.teacher, list: [] }; groups.push(hit); }
+    hit.list.push({ item: g.item, by: o.name, id: o.id, raw: g.teacher });
+  }); });
+  $('gifts').innerHTML = groups.length ? groups.map(function (x) {
+    var fund = D.central.some(function (c) { return sameTeacher(x.k, teacherKey(c)); });
+    var hoods = x.list.filter(function (l) { return l.item === 'hood'; }).length, tees = x.list.length - hoods;
+    var flag = (fund && hoods ? '<span class="pill fund">กองกลางให้ Hood แล้ว</span> ' : '') + (hoods > 1 || tees > 1 ? '<span class="pill warn">ซ้ำ</span>' : '');
+    return '<div class="gift"><span class="tn">' + esc(x.name) + '</span>' + flag + '<span>' + x.list.map(function (l) {
+      return itemName(l.item) + ' · ' + esc(l.by) + ' (' + esc(l.id) + (l.raw !== x.name ? ', พิมพ์ว่า "' + esc(l.raw) + '"' : '') + ')';
+    }).join(' · ') + '</span></div>';
+  }).join('') : '<p class="hint">ยังไม่มีคนสั่งของให้ครู</p>';
+
+  renderHouses(H);
+}
+function renderHouses(H) {
+  var q = $('q').value.trim().toLowerCase();
+  var list = H.filter(function (h) { return !q || (h.email + ' ' + h.names.join(' ') + ' ' + h.orders.map(function (o) { return o.id; }).join(' ')).toLowerCase().indexOf(q) >= 0; });
+  $('houses').innerHTML = list.length ? list.map(function (h, i) {
+    var pend = h.orders.reduce(function (t, o) { return t + (o.giftTeePending || 0); }, 0);
+    return '<div class="house"><div class="hd"><div><div class="nm">' + esc(h.names.join(' / ')) + '</div><div class="em">' + esc(h.email) +
+      (h.contacts.length ? ' · ' + esc(h.contacts.join(', ')) : '') + '</div></div>' +
+      '<div class="amt num">' + baht(h.total) + (pend ? '<span class="hint"> + เสื้อยืดครู ' + pend + '</span>' : '') + '</div></div>' +
+      h.orders.map(function (o) {
+        return '<div class="ord"><span class="id">' + esc(o.id) + '</span><span class="items">' +
+          esc(lines(o).map(function (l) { return l[0]; }).join(' · ')) + '<small>' + when(o.ts) + (o.note ? ' · หมายเหตุ: ' + esc(o.note) : '') + '</small></span>' +
+          '<span class="t num">' + baht(o.total) + '</span><button class="btn small danger" type="button" data-del="' + esc(o.id) + '">ลบ</button></div>';
+      }).join('') +
+      '<div><button class="btn small" type="button" data-bill="' + i + '">คัดลอกข้อความแจ้งยอด</button></div></div>';
+  }).join('') : '<p class="hint">' + (q ? 'ไม่พบ' : 'ยังไม่มีคำสั่งซื้อ') + '</p>';
+  $('houses').onclick = function (e) {
+    var bill = e.target.closest('[data-bill]');
+    if (bill) { copy(billText(list[Number(bill.getAttribute('data-bill'))])); return; }
+    var del = e.target.closest('[data-del]');
+    if (!del) return;
+    if (!del.classList.contains('armed')) { del.classList.add('armed'); del.textContent = 'ยืนยันลบ'; setTimeout(function () { del.classList.remove('armed'); del.textContent = 'ลบ'; }, 4000); return; }
+    del.disabled = true; del.textContent = 'กำลังลบ…';
+    var id = del.getAttribute('data-del');
+    post({ action: 'delete', token: token, id: id }).then(function (d) {
+      if (!d.ok && d.error === 'AUTH') { logout(); throw new Error('หมดเวลาเข้าสู่ระบบ'); }
+      toast(d.ok ? 'ลบ ' + id + ' แล้ว' : d.error);
+      return loadData();
+    }).catch(function (err) { toast(err.message); loadData().catch(function () {}); });
+  };
+}
+$('q').addEventListener('input', function () { if (D) renderHouses(houses()); });
+$('copyAll').addEventListener('click', function () {
+  if (!D) return;
+  var head = ['เลขที่', 'เวลา', 'ชื่อ', 'อีเมล', 'เบอร์/LINE', 'Hood ฟรี'].concat(D.hoodSizes.map(function (s) { return 'Hood ' + s; }), D.teeSizes.map(function (s) { return 'เสื้อยืด ' + s; }), ['ร่ม', 'ของขวัญครู', 'ยอด (บาท)', 'หมายเหตุ']);
+  var rows = D.orders.map(function (o) {
+    return [o.id, when(o.ts), o.name, o.email, o.contact || '', o.hoodFree || ''].concat(
+      D.hoodSizes.map(function (s) { return (o.hood || {})[s] || ''; }), D.teeSizes.map(function (s) { return (o.tee || {})[s] || ''; }),
+      [o.umbrella || '', (o.gifts || []).map(function (g) { return itemName(g.item) + 'ให้' + g.teacher; }).join(', '), o.total, o.note || '']);
+  });
+  copy([head].concat(rows).map(function (r) { return r.map(function (c) { return String(c).replace(/[\t\n]/g, ' '); }).join('\t'); }).join('\n'));
+});
+
+token = ss('wsc21-token');
+if (token) loadData().catch(function () { logout(); });
+</script>
+</body>
+</html>
