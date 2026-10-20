@@ -415,7 +415,7 @@ function buildRows() {
       stepper('tee', r[0], 0) + '<div class="sum num">–</div></div>';
   }).join('');
   $('umbRows').innerHTML = '<div class="row" id="umb-1"><div class="sz">ร่ม</div><div class="meta"><b>75 ฿</b>/คัน</div>' +
-    stepper('umb', '1', 0) + '<div class="sum num">–</div></div>';
+    stepper('umb', 'ร่ม', 0) + '<div class="sum num">–</div></div>';
   document.querySelectorAll('.rows').forEach(function (el) {
     el.addEventListener('click', function (e) {
       var b = e.target.closest('button[data-d]'); if (!b) return;
@@ -614,7 +614,7 @@ function renderClaimed() {
 
 /* ---------- remote ---------- */
 function refresh() {
-  return getJSON('', 'gifts', 1).then(function (d) {
+  return getJSON('', 'gifts', 2).then(function (d) {
     if (!d || !d.ok) return;
     R.gifts = d.gifts || []; R.orderers = d.orderers || []; R.closed = !!d.closed; R.loaded = true;
     if (d.central && d.central.length) CENTRAL = d.central;
@@ -699,7 +699,8 @@ function send() {
         '<button type="button" class="btn primary" id="again">เสร็จสิ้น</button>');
       S = blank(sent);
       $('note').value = '';
-      update(); renderHistory(); refresh();
+      if (!d.repeat) R.gifts = R.gifts.concat(sent.gifts.map(function (g) { return { teacher: g.teacher, item: g.item, by: o.name, ts: o.ts }; }));
+      renderClaimed(); renderTeacher(); update(); renderHistory(); refresh();
     })
     .catch(function (e) {
       var el = $('sendErr');
