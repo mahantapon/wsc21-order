@@ -577,6 +577,7 @@ function update() {
 
 /* ---------- this parent's history (by email) ---------- */
 var emailTimer = null;
+var histVer = 0; // bumped on every lookup/order/slip so a slow, older history reply can never overwrite newer data
 function onEmail() {
   S.email = $('email').value; store('wsc21-draft', S);
   clearTimeout(emailTimer);
@@ -599,12 +600,13 @@ function lookupEmail() {
   var em = normEmail(S.email);
   if (!EMAIL_RE.test(em)) { H = { email: '', orders: [], slips: [], loading: false }; renderHistory(); update(); return; }
   if (em === H.email && !H.loading) return;
+  var ver = ++histVer;
   H = { email: em, orders: [], slips: [], loading: true }; renderHistory();
   getJSON('action=mine&email=' + encodeURIComponent(em), 'orders').then(function (d) {
-    if (normEmail(S.email) !== em) return;
+    if (ver !== histVer || normEmail(S.email) !== em) return;
     H = { email: em, orders: (d && d.ok && d.orders) || [], slips: (d && d.ok && d.slips) || [], loading: false };
     renderHistory(); update();
-  }).catch(function () { H.loading = false; renderHistory(); });
+  }).catch(function () { if (ver === histVer) { H.loading = false; renderHistory(); } });
 }
 function renderHistory() {
   var box = $('history');
@@ -705,6 +707,7 @@ function sendSlip() {
       P.cid = newCid();
       return;
     }
+    histVer++;
     H.slips = d.slips || H.slips.concat([d.slip]);
     P = { image: '', cid: '' };
     $('payFile').value = ''; $('payPreview').hidden = true; $('payPickText').textContent = '+ เลือกรูปสลิป';
@@ -815,6 +818,7 @@ function send() {
     .then(function (d) {
       if (!d || !d.ok) throw new Error((d && d.error) || 'ส่งไม่สำเร็จ');
       var o = d.order, saved = { name: o.name, email: sent.email, contact: sent.contact, note: o.note, hoodFree: o.hoodFree, hood: o.hood, hoodUnits: o.hoodUnits, tee: o.tee, umbrella: o.umbrella }, c = calc(saved);
+      histVer++;
       H = { email: normEmail(sent.email), orders: d.orders || [o], slips: d.slips || H.slips || [], loading: false };
       openSheet('<div class="done"><div class="big">สั่งเรียบร้อยแล้ว</div></div><div>เลขที่คำสั่งซื้อ <span class="code">' + esc(o.id) + '</span></div>' +
         slipHTML(saved, c, true) + grandHTML(H.orders, 'ทั้งหมดของอีเมลนี้') +
