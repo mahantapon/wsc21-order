@@ -72,6 +72,8 @@ input[type=text], input[type=password], input[type=search] { width: 100%; border
 .btn.danger.solid { background: var(--coral); color: #fff; border-color: var(--coral); }
 .btn:disabled { opacity: .45; cursor: default; }
 #mailWarn { color: var(--coral); font-size: 13px; }
+.rejbox { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.rejbox input { flex: 1 1 220px; min-width: 0; border: 1.5px solid var(--coral); background: var(--bg); border-radius: 8px; padding: 6px 10px; font-size: 15px; }
 .sliptools { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; grid-column: 1 / -1; }
 .btn.okbtn { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
 .pill.wait { background: var(--chip); color: var(--muted); }
@@ -249,11 +251,12 @@ function houses() {
   (D.slips || []).forEach(function (x) {
     var h = house(x.email);
     if (!h.names.length) h.names.push(x.name || x.email);
-    h.slips.push(x); h.paid += Number(x.amount) || 0; if (x.checked) h.checked += Number(x.amount) || 0;
+    h.slips.push(x); if (!x.rejected) { h.paid += Number(x.amount) || 0; if (x.checked) h.checked += Number(x.amount) || 0; }
   });
   list.forEach(function (h) {
     h.due = Math.max(0, Math.round((h.total - h.paid) * 100) / 100);
-    h.status = h.due > 0 ? (h.paid > 0 ? 'part' : 'none') : !h.slips.length ? 'free' : h.slips.some(function (x) { return !x.checked; }) ? 'wait' : 'done';
+    var live = h.slips.filter(function (x) { return !x.rejected; });
+    h.status = h.due > 0 ? (h.paid > 0 ? 'part' : 'none') : !live.length ? 'free' : live.some(function (x) { return !x.checked; }) ? 'wait' : 'done';
   });
   return list;
 }
@@ -302,7 +305,7 @@ function render() {
     umb += o.umbrella || 0; pieces += o.umbrella || 0;
   });
   var paid = 0, checked = 0, waiting = 0;
-  (D.slips || []).forEach(function (x) { var n = Number(x.amount) || 0; paid += n; if (x.checked) checked += n; else waiting++; });
+  (D.slips || []).forEach(function (x) { if (x.rejected) return; var n = Number(x.amount) || 0; paid += n; if (x.checked) checked += n; else waiting++; });
   $('kpis').innerHTML = [['บ้านที่สั่ง', H.filter(function (h) { return h.orders.length; }).length], ['ชิ้นทั้งหมด', pieces], ['ยอดสั่งรวม', baht(money)],
     ['แนบสลิปแล้ว', baht(paid)], ['ตรวจแล้ว', baht(checked)], ['สลิปรอตรวจ', waiting + ' ใบ']].map(function (k) {
     return '<div class="kpi"><b>' + k[0] + '</b><strong class="num">' + k[1] + '</strong></div>';
@@ -352,8 +355,13 @@ function renderHouses(H) {
         return '<div class="ord slip"><span class="id">' + esc(x.id) + '</span><span class="items">สลิปโอน ' + (x.ocr === 'match' ? '<span class="pill ok">ระบบอ่านยอดตรง</span>' : x.ocr === 'unreadable' ? '<span class="pill warn">ระบบอ่านยอดไม่ได้ ดูรูปเอง</span>' : '') + '<small>' + when(x.ts) + '</small></span>' +
           '<span class="t num">' + baht(Number(x.amount) || 0) + '</span><span class="sliptools">' +
           '<button class="btn small" type="button" data-view="' + esc(x.id) + '">ดูสลิป</button>' +
-          '<button class="btn small ' + (x.checked ? 'okbtn' : '') + '" type="button" data-check="' + esc(x.id) + '" data-on="' + (x.checked ? 1 : 0) + '">' + (x.checked ? 'ตรวจแล้ว ✓' : 'กดยืนยันว่าตรวจแล้ว') + '</button>' +
-          '<button class="btn small danger" type="button" data-sdel="' + esc(x.id) + '">ลบ</button></span></div>';
+          (x.rejected ? '<span class="pill warn">ไม่ผ่าน</span>' :
+            '<button class="btn small ' + (x.checked ? 'okbtn' : '') + '" type="button" data-check="' + esc(x.id) + '" data-on="' + (x.checked ? 1 : 0) + '">' + (x.checked ? 'ยืนยันยอดแล้ว ✓' : 'ยืนยันยอด (ส่งอีเมล)') + '</button>' +
+            (x.checked ? '' : '<button class="btn small danger" type="button" data-rej="' + esc(x.id) + '">ไม่ผ่าน…</button>')) +
+          '<button class="btn small danger" type="button" data-sdel="' + esc(x.id) + '">ลบ</button></span>' +
+          (x.rejected ? '<span class="hint" style="grid-column:1/-1">เหตุผลที่ไม่ผ่าน: ' + esc(x.reason || '') + (x.reviewedBy ? ' · โดย ' + esc(x.reviewedBy) : '') + '</span>' : '') +
+          '<span class="rejbox" id="rej-' + esc(x.id) + '" hidden style="grid-column:1/-1"><input type="text" placeholder="เหตุผล เช่น ยอดไม่ตรง / โอนผิดบัญชี / สลิปไม่ชัด" maxlength="300"> ' +
+          '<button class="btn small danger solid" type="button" data-rejgo="' + esc(x.id) + '">ส่งเหตุผลเข้าอีเมลผู้ปกครอง</button></span></div>';
       }).join('') +
       '<div><button class="btn small" type="button" data-bill="' + i + '">คัดลอกข้อความแจ้งยอด</button></div></div>';
   }).join('') : '<p class="hint">' + (q || f ? 'ไม่พบ' : 'ยังไม่มีคำสั่งซื้อ') + '</p>';
@@ -368,9 +376,26 @@ function renderHouses(H) {
       post({ action: 'slipcheck', token: token, id: chk.getAttribute('data-check'), checked: chk.getAttribute('data-on') !== '1' }, 'slip').then(function (d) {
         if (!d.ok && d.error === 'AUTH') { logout(); throw new Error('หมดเวลาเข้าสู่ระบบ'); }
         if (!d.ok) throw new Error(d.error);
-        D.slips.forEach(function (x) { if (x.id === d.slip.id) x.checked = d.slip.checked; });
+        D.slips.forEach(function (x) { if (x.id === d.slip.id) { x.checked = d.slip.checked; x.rejected = d.slip.rejected; x.reason = d.slip.reason; } });
+        if (d.slip.checked) toast(d.mailed ? 'ยืนยันแล้ว · ส่งใบสรุปเข้าอีเมล ' + d.slip.email + ' แล้ว' : 'ยืนยันแล้ว แต่ส่งอีเมลไม่สำเร็จ');
         render();
       }).catch(function (err) { toast(err.message); chk.disabled = false; });
+      return;
+    }
+    var rej = e.target.closest('[data-rej]');
+    if (rej) { var box = $('rej-' + rej.getAttribute('data-rej')); box.hidden = !box.hidden; if (!box.hidden) box.querySelector('input').focus(); return; }
+    var go = e.target.closest('[data-rejgo]');
+    if (go) {
+      var reason = go.parentNode.querySelector('input').value.trim();
+      if (!reason) { toast('ใส่เหตุผลก่อน'); return; }
+      go.disabled = true; go.textContent = 'กำลังส่ง…';
+      post({ action: 'slipreject', token: token, id: go.getAttribute('data-rejgo'), reason: reason }, 'slip').then(function (d) {
+        if (!d.ok && d.error === 'AUTH') { logout(); throw new Error('หมดเวลาเข้าสู่ระบบ'); }
+        if (!d.ok) throw new Error(d.error);
+        D.slips.forEach(function (x) { if (x.id === d.slip.id) { x.checked = false; x.rejected = true; x.reason = d.slip.reason; x.reviewedBy = d.slip.reviewedBy; } });
+        toast(d.mailed ? 'ตั้งเป็นไม่ผ่าน · ส่งเหตุผลเข้าอีเมล ' + d.slip.email + ' แล้ว' : 'ตั้งเป็นไม่ผ่านแล้ว แต่ส่งอีเมลไม่สำเร็จ');
+        render();
+      }).catch(function (err) { toast(err.message); go.disabled = false; go.textContent = 'ส่งเหตุผลเข้าอีเมลผู้ปกครอง'; });
       return;
     }
     var del = e.target.closest('[data-del],[data-sdel]');
@@ -497,8 +522,8 @@ function workbook(X) {
   var prod = [['Hood', 'ตัวฟรี', 'สั่งเพิ่ม', 'รวม']].concat(D.hoodSizes.map(function (z) { return [z, hf[z] || 0, hx[z] || 0, (hf[z] || 0) + (hx[z] || 0)]; }));
   prod = prod.concat([[], ['เสื้อยืด', 'ราคา', 'จำนวน', 'เป็นเงิน']], D.teeSizes.map(function (z) { return [z, D.prices.tee[z], tq[z] || 0, (tq[z] || 0) * D.prices.tee[z]]; }), [[], ['ร่ม (คัน)', umb]]);
   sheet('ยอดสั่งผลิต', prod, [12, 10, 10, 10]);
-  sheet('สลิป', [['สลิป', 'เวลา', 'ชื่อ', 'อีเมล', 'ยอด (บาท)', 'ระบบอ่านยอด', 'ตรวจแล้ว']].concat((D.slips || []).map(function (x) {
-    return [x.id, when(x.ts), x.name || '', x.email, Number(x.amount) || 0, x.ocr === 'match' ? 'ตรง' : x.ocr === 'unreadable' ? 'อ่านไม่ได้' : '', x.checked ? 'ใช่' : ''];
+  sheet('สลิป', [['สลิป', 'เวลา', 'ชื่อ', 'อีเมล', 'ยอด (บาท)', 'ระบบอ่านยอด', 'ผลตรวจ']].concat((D.slips || []).map(function (x) {
+    return [x.id, when(x.ts), x.name || '', x.email, Number(x.amount) || 0, x.ocr === 'match' ? 'ตรง' : x.ocr === 'unreadable' ? 'อ่านไม่ได้' : '', x.rejected ? 'ไม่ผ่าน: ' + (x.reason || '') : x.checked ? 'ยืนยันแล้ว' : 'รอตรวจ'];
   })), [7, 14, 18, 26, 10, 12, 9]);
   return wb;
 }

@@ -624,13 +624,14 @@ function renderHistory() {
 }
 
 /* ---------- payment slip ---------- */
-function paidSum() { return H.slips.reduce(function (t, x) { return t + (Number(x.amount) || 0); }, 0); }
+function paidSum() { return H.slips.reduce(function (t, x) { return t + (x.rejected ? 0 : Number(x.amount) || 0); }, 0); }
 function dueSum() { return H.orders.reduce(function (t, o) { return t + (o.total || 0); }, 0); }
 function leftSum() { return Math.max(0, Math.round((dueSum() - paidSum()) * 100) / 100); }
 // same wording as the admin page and the e-mail
 function payStatus() {
-  if (leftSum() > 0) return paidSum() > 0 ? ['โอนไม่ครบ', 'warn'] : ['ยังไม่ได้โอน', 'warn'];
-  return H.slips.some(function (x) { return !x.checked; }) ? ['แนบสลิปครบแล้ว รอกรรมการตรวจ', 'fund'] : ['ชำระครบ กรรมการตรวจแล้ว', 'ok'];
+  var live = H.slips.filter(function (x) { return !x.rejected; });
+  if (leftSum() > 0) return paidSum() > 0 ? ['โอนไม่ครบ', 'warn'] : live.length < H.slips.length ? ['สลิปไม่ผ่าน รอแนบใหม่', 'warn'] : ['ยังไม่ได้โอน', 'warn'];
+  return live.some(function (x) { return !x.checked; }) ? ['แนบสลิปครบแล้ว รอกรรมการตรวจ', 'fund'] : ['ชำระครบ กรรมการยืนยันแล้ว', 'ok'];
 }
 function renderPay() {
   var has = !!(H.email && H.orders.length);
@@ -645,7 +646,8 @@ function renderPay() {
   $('payDue').innerHTML = '<b>ยอดที่ต้องโอน</b><strong>' + baht(left) + '</strong>';
   $('paySlips').innerHTML = H.slips.map(function (x) {
     return '<div class="sliprow num"><span><b>' + esc(x.id) + '</b> · ' + when(x.ts) + ' · ' + baht(Number(x.amount) || 0) + '</span>' +
-      (x.checked ? '<span class="pill ok">กรรมการตรวจแล้ว</span>' : '<span class="pill wait">รอตรวจ</span>') + '</div>';
+      (x.rejected ? '<span class="pill warn">ไม่ผ่าน</span>' : x.checked ? '<span class="pill ok">กรรมการยืนยันแล้ว</span>' : '<span class="pill wait">รอตรวจ</span>') +
+      (x.rejected && x.reason ? '<div class="hint" style="flex-basis:100%">เหตุผล: ' + esc(x.reason) + ' · กรุณาโอน/แนบสลิปใหม่</div>' : '') + '</div>';
   }).join('');
   payReady();
 }
