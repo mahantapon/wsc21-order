@@ -297,7 +297,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
     <div class="photo"><img src="img/tee.jpg" width="1100" height="653" alt="แบบเสื้อยืดสีดำ หน้าอกซ้าย NO limit หลังเลข 21 รายชื่อเด็ก WANSAWANGCHIT"></div>
     <p class="hint">เสื้อยืดคอกลมสีดำ ผ้า cotton comb 30 พิมพ์หน้าอกซ้ายและด้านหลัง · ผู้ปกครองใส่ในงานตลาดนัดสานฝัน งานวิพิธ งาน Making Melogy และงานวันไม้งาม</p>
     <div class="rows" id="teeRows"></div>
-    <p class="hint">ราคาต่อตัวจาก supplier คิดที่ยอดสั่งรวม 100 ตัว · ถ้าต้องการไซส์ใดเกิน 5 ตัว ทักกรรมการได้เลย</p>
+    <p class="hint">ราคาต่อตัวจาก supplier คิดที่ยอดสั่งรวม 100 ตัว</p>
   </section>
 
   <section class="card" aria-labelledby="h-umb">
@@ -308,7 +308,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
 
   <section class="card" aria-labelledby="h-note">
     <h2 id="h-note">หมายเหตุ</h2>
-    <label class="field" for="note"><span class="hint" style="font-weight:400">ไม่บังคับ เช่น ต้องการมากกว่า 5 ตัว หรือรายละเอียดอื่น</span>
+    <label class="field" for="note"><span class="hint" style="font-weight:400">ไม่บังคับ เช่น รายละเอียดเพิ่มเติมที่อยากแจ้งกรรมการ</span>
       <textarea id="note"></textarea>
     </label>
   </section>
@@ -362,7 +362,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 
 <script>
 var API = 'https://script.google.com/macros/s/AKfycbzKnFJLyZAMiZ4j46yJvun-DkF8fx2AbNIkvEboz5PvzCaR3iLZCGfJU9PH9yimCbNhLQ/exec';
 var CLOSE_AT = new Date('2026-10-30T23:59:59+07:00');
-var HOOD_PRICE = 290, UMB_PRICE = 75, MAX = 5;
+var HOOD_PRICE = 290, UMB_PRICE = 75, MAX = 99; // no real per-size limit (21 ต.ค.); 99 only keeps the stepper sane
 var HOOD = [ // size, chest, length, sleeve
   ['เด็ก', 36, 22, 20], ['XS', 40, 25, 23], ['S', 42, 26, 25], ['M', 44, 27, 25], ['L', 48, 27, 25],
   ['XL', 50, 28, 26], ['2XL', 52, 29, 28], ['3XL', 54, 30, 29], ['4XL', 56, 31, 30]
