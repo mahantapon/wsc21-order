@@ -1,0 +1,523 @@
+var API = 'https://script.google.com/macros/s/AKfycbzKnFJLyZAMiZ4j46yJvun-DkF8fx2AbNIkvEboz5PvzCaR3iLZCGfJU9PH9yimCbNhLQ/exec';
+var CLOSE_AT = new Date('2026-10-30T23:59:59+07:00');
+var HOOD_PRICE = 290, UMB_PRICE = 75, MAX = 99; // no real per-size limit (21 ต.ค.); 99 only keeps the stepper sane
+var HOOD = [ // size, chest, length, sleeve
+  ['เด็ก', 36, 22, 20], ['XS', 40, 25, 23], ['S', 42, 26, 25], ['M', 44, 27, 25], ['L', 48, 27, 25],
+  ['XL', 50, 28, 26], ['2XL', 52, 29, 28], ['3XL', 54, 30, 29], ['4XL', 56, 31, 30]
+];
+var TEE = [ // size, chest, price
+  ['S', 32, 150], ['M', 36, 160], ['L', 40, 165], ['XL', 44, 170], ['2XL', 48, 190], ['3XL', 52, 230], ['4XL', 54, 240], ['5XL', 56, 280]
+];
+var TEE_PRICE = {}; TEE.forEach(function (t) { TEE_PRICE[t[0]] = t[2]; });
+var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+var NAME_RE = /^[A-Za-z]+(?: [A-Za-z]+)*$/;   // ชื่อสกรีน: A-Z ล้วน เว้นวรรคระหว่างคำได้ ไม่มีตัวเลข/ตัวพิเศษ (ตรงกับหลังบ้าน)
+var NAME_MAX = 60;                             // ไม่จำกัดตามโจทย์ แค่กันข้อความขยะ
+var THAI_RE = /[\u0E00-\u0E7F]/;
+
+function blank(keep) { return { name: keep ? keep.name : '', email: keep ? keep.email : '', contact: keep ? keep.contact : '', hoodFirst: '', hood: {}, tee: {}, umbrella: 0, hoodNames: {}, note: '' }; }
+var S = blank();
+var R = { orderers: [], closed: Date.now() > CLOSE_AT.getTime(), loaded: false };
+var H = { email: '', orders: [], slips: [], loading: false }; // this parent's earlier orders and slips
+var P = { image: '', cid: '' }; // slip being attached
+var hoodSig = '';          // which hood lines are on screen (the name inputs are rebuilt only when this changes)
+var pendingFocus = false;  // jump to the first missing hood name after closing the review sheet
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function baht(n) { return n.toLocaleString('th-TH') + ' ฿'; }
+function when(iso) { try { return new Date(iso).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+function store(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function load(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function normEmail(s) { return String(s || '').trim().toLowerCase(); }
+function newCid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+
+// one request with a timeout; Google's reply hop fails now and then, so callers retry
+function call(url, opts, ms, key) {
+  var ctl = typeof AbortController === 'function' ? new AbortController() : null;
+  var t = ctl ? setTimeout(function () { ctl.abort(); }, ms || 25000) : null;
+  var o = opts || {}; if (ctl) o.signal = ctl.signal;
+  return fetch(url, o).then(function (r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function (d) {
+    // a lost reply sometimes comes back as the wrong document; treat that as a network hiccup
+    if (!d || (d.ok !== false && key && !(key in d))) throw new Error('ตอบกลับไม่ครบ');
+    return d;
+  }).finally(function () { if (t) clearTimeout(t); });
+}
+function getJSON(q, key, tries) {
+  tries = tries == null ? 2 : tries;
+  return call(API + (q ? '?' + q : ''), { cache: 'no-store' }, 25000, key).catch(function (e) {
+    if (tries <= 0) throw e;
+    return wait(1200).then(function () { return getJSON(q, key, tries - 1); });
+  });
+}
+
+function nameKey(s) { return String(s || '').toLowerCase().replace(/[\s.\-_,()'"]/g, '').replace(/[์​-‍]/g, ''); }
+function itemName(i) { return i === 'tee' ? 'เสื้อยืด' : 'Hood'; }
+
+/* ---------- build static parts ---------- */
+function buildHoodChart() {
+  var h = '<thead><tr><th>ไซส์</th><th>รอบอก</th><th>ยาว</th><th>แขน</th></tr></thead><tbody>';
+  HOOD.forEach(function (r) { h += '<tr><td><b>' + r[0] + '</b></td><td>' + r[1] + '″</td><td>' + r[2] + '″</td><td>' + r[3] + '″</td></tr>'; });
+  $('hoodChart').innerHTML = h + '</tbody>';
+}
+function stepper(kind, size, n) {
+  return '<div class="stepper" data-kind="' + kind + '" data-size="' + esc(size) + '">' +
+    '<button type="button" data-d="-1" aria-label="ลด ' + esc(size) + '"' + (n <= 0 ? ' disabled' : '') + '>−</button>' +
+    '<output class="num">' + n + '</output>' +
+    '<button type="button" data-d="1" aria-label="เพิ่ม ' + esc(size) + '"' + (n >= MAX ? ' disabled' : '') + '>+</button></div>';
+}
+function buildRows() {
+  $('hoodRows').innerHTML = HOOD.map(function (r) {
+    return '<div class="row" id="hood-' + r[0] + '"><div class="sz">' + r[0] + '</div><div class="meta num">อก ' + r[1] + '″ · ยาว ' + r[2] + '″</div>' +
+      stepper('hood', r[0], 0) + '<div class="sum num">–</div></div>';
+  }).join('');
+  $('teeRows').innerHTML = TEE.map(function (r) {
+    return '<div class="row" id="tee-' + r[0] + '"><div class="sz">' + r[0] + '</div><div class="meta num">อก ' + r[1] + '″<br><b>' + r[2] + ' ฿</b>/ตัว</div>' +
+      stepper('tee', r[0], 0) + '<div class="sum num">–</div></div>';
+  }).join('');
+  $('umbRows').innerHTML = '<div class="row" id="umb-1"><div class="sz">ร่ม</div><div class="meta"><b>75 ฿</b>/คัน</div>' +
+    stepper('umb', 'ร่ม', 0) + '<div class="sum num">–</div></div>';
+  document.querySelectorAll('.rows').forEach(function (el) {
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-d]'); if (!b) return;
+      var st = b.parentNode, kind = st.getAttribute('data-kind'), size = st.getAttribute('data-size'), d = Number(b.getAttribute('data-d'));
+      if (kind === 'umb') S.umbrella = Math.max(0, Math.min(50, S.umbrella + d));
+      else { var m = S[kind]; m[size] = Math.max(0, Math.min(MAX, (m[size] || 0) + d)); if (!m[size]) delete m[size]; }
+      if (kind === 'hood' && (!S.hoodFirst || !S.hood[S.hoodFirst])) S.hoodFirst = S.hood[size] ? size : '';
+      update();
+    });
+  });
+}
+
+/* ---------- totals ---------- */
+function calc(o) {
+  o = o || S;
+  var hoodExtra = 0, teeN = 0, teeSum = 0;
+  Object.keys(o.hood || {}).forEach(function (k) { hoodExtra += o.hood[k]; });
+  Object.keys(o.tee || {}).forEach(function (k) { teeN += o.tee[k]; teeSum += o.tee[k] * TEE_PRICE[k]; });
+  var umb = o.umbrella || 0;
+  return { hoodExtra: hoodExtra, hoodSum: hoodExtra * HOOD_PRICE, teeN: teeN, teeSum: teeSum, umbSum: umb * UMB_PRICE,
+    pieces: (o.hoodFree ? 1 : 0) + hoodExtra + teeN + umb,
+    total: hoodExtra * HOOD_PRICE + teeSum + umb * UMB_PRICE,
+    any: !!(o.hoodFree || hoodExtra || teeN || umb) };
+}
+// merge several orders into one summary order
+function merge(list) {
+  var m = blank();
+  list.forEach(function (o) {
+    if (o.hoodFree) m.hoodFree = o.hoodFree;
+    m.hoodUnits = (m.hoodUnits || []).concat(unitsOf(o));
+    Object.keys(o.hood || {}).forEach(function (k) { m.hood[k] = (m.hood[k] || 0) + o.hood[k]; });
+    Object.keys(o.tee || {}).forEach(function (k) { m.tee[k] = (m.tee[k] || 0) + o.tee[k]; });
+    m.umbrella += o.umbrella || 0;
+  });
+  return m;
+}
+// one entry per hoodie (size + name + free?) — orders saved before names existed are rebuilt from their counts
+function unitsOf(o) {
+  if (o.hoodUnits && o.hoodUnits.length) return o.hoodUnits;
+  var u = [];
+  if (o.hoodFree) u.push({ size: o.hoodFree, name: '', free: true });
+  HOOD.forEach(function (r) { for (var i = 0; i < ((o.hood || {})[r[0]] || 0); i++) u.push({ size: r[0], name: '', free: false }); });
+  return u;
+}
+// what an order contains, ignoring which hoodie was the free one — two orders with the same signature look like a double order
+function orderSig(o) {
+  var u = unitsOf(o).map(function (x) { return x.size + ':' + String(x.name || '').toLowerCase(); }).sort().join(',');
+  var t = TEE.filter(function (r) { return (o.tee || {})[r[0]]; }).map(function (r) { return r[0] + 'x' + o.tee[r[0]]; }).join(',');
+  return u + '|' + t + '|' + (o.umbrella || 0);
+}
+function unitText(u) { return u.size + (u.name ? ' (' + u.name + ')' : '') + (u.free ? ' ฟรี' : ''); }
+function itemsText(o) {
+  var parts = [];
+  var hu = unitsOf(o);
+  if (hu.length) parts.push('Hood ' + hu.map(unitText).join(', '));
+  var t = TEE.filter(function (r) { return o.tee[r[0]]; }).map(function (r) { return r[0] + '×' + o.tee[r[0]]; });
+  if (t.length) parts.push('เสื้อยืด ' + t.join(', '));
+  if (o.umbrella) parts.push('ร่ม ' + o.umbrella);
+  return parts.join(' · ');
+}
+function setRow(id, n, sum) {
+  var row = $(id); if (!row) return;
+  row.classList.toggle('on', n > 0);
+  row.querySelector('output').textContent = n;
+  var bs = row.querySelectorAll('button');
+  bs[0].disabled = n <= 0; bs[1].disabled = n >= (id === 'umb-1' ? 50 : MAX);
+  row.querySelector('.sum').textContent = n > 0 ? baht(sum) : '–';
+}
+function freeUsedBy() { return H.orders.filter(function (o) { return o.hoodFree; })[0] || null; }
+// the first hood of the house is free: it goes to the size tapped first, the rest are 290 each
+function freeSize(o) {
+  if (freeUsedBy()) return '';
+  if (o.hoodFirst && o.hood[o.hoodFirst]) return o.hoodFirst;
+  var r = HOOD.filter(function (x) { return o.hood[x[0]]; })[0];
+  return r ? r[0] : '';
+}
+// every hoodie on the form as its own line: the free one first, then the rest by size; names come from o.hoodNames[size][index]
+function hoodUnits(o) {
+  var f = freeSize(o), units = [];
+  if (f) units.push({ size: f, idx: 0, free: true });
+  HOOD.forEach(function (r) { for (var i = (r[0] === f ? 1 : 0); i < ((o.hood || {})[r[0]] || 0); i++) units.push({ size: r[0], idx: i, free: false }); });
+  return units.map(function (u) { u.name = String(((o.hoodNames || {})[u.size] || [])[u.idx] || '').replace(/\s+/g, ' ').trim(); return u; });
+}
+function priced(o) {
+  var f = freeSize(o), extra = {};
+  Object.keys(o.hood || {}).forEach(function (k) { var n = o.hood[k] - (k === f ? 1 : 0); if (n > 0) extra[k] = n; });
+  return { name: o.name, email: o.email, contact: o.contact, note: o.note, hoodFree: f, hood: extra, tee: o.tee, umbrella: o.umbrella, hoodUnits: hoodUnits(o) };
+}
+function nameProblem(v) { return !v ? 'ใส่ชื่อ' : THAI_RE.test(v) ? 'พิมพ์เป็นภาษาอังกฤษเท่านั้น' : !NAME_RE.test(v) ? 'ใช้ตัวอักษร A-Z เท่านั้น ไม่ต้องมีตัวเลขหรือตัวพิเศษ' : v.length > NAME_MAX ? 'ชื่อยาวเกินไป' : ''; }
+function checkNameInput(el) {
+  var v = el.value.replace(/\s+/g, ' ').trim(), bad = v && nameProblem(v);
+  el.classList.toggle('bad', !!bad);
+  var m = el.parentNode.querySelector('.nameerr'); if (m) m.textContent = bad || '';
+}
+// the name inputs are rebuilt only when the list of hoodies changes, so typing never loses focus
+function renderHoodNames() {
+  var units = hoodUnits(S), box = $('hoodNames');
+  box.hidden = !units.length;
+  var sig = units.map(function (u) { return u.size + '#' + u.idx + (u.free ? 'f' : ''); }).join('|');
+  if (sig === hoodSig) return;
+  hoodSig = sig;
+  $('hoodNameRows').innerHTML = units.map(function (u, k) {
+    var id = 'hn-' + k;
+    return '<div class="nameRow"><label class="lab" for="' + id + '"><b>' + (u.free ? 'ตัวฟรี' : 'ตัวที่ ' + (k + 1)) + '</b> · ไซส์ ' + esc(u.size) +
+      (u.free ? '' : ' <span class="hint">· 290 ฿</span>') + '</label><div><input type="text" id="' + id + '" lang="en" maxlength="60" autocomplete="off" autocapitalize="words" ' +
+      'placeholder="ชื่อภาษาอังกฤษ เช่น BEE" data-size="' + esc(u.size) + '" data-i="' + u.idx + '" value="' + esc(u.name) + '"><div class="nameerr" aria-live="polite"></div></div></div>';
+  }).join('');
+  $('hoodNameRows').querySelectorAll('input').forEach(checkNameInput);
+}
+function focusNameIssue() {
+  var el = [].slice.call($('hoodNameRows').querySelectorAll('input')).filter(function (i) { return nameProblem(i.value.replace(/\s+/g, ' ').trim()); })[0];
+  if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus({ preventScroll: true }); }
+}
+function update() {
+  var used = freeUsedBy(), f = freeSize(S);
+  $('hoodNote').textContent = used ? 'อีเมลนี้รับตัวฟรีไปแล้ว (ไซส์ ' + used.hoodFree + ' ในคำสั่ง ' + used.id + ') ตัวที่สั่งเพิ่มคิดตัวละ 290 บาท'
+    : 'ตัวแรกฟรี (งบกองกลาง บ้านละ 1 ตัว) · ตั้งแต่ตัวที่ 2 คิดตัวละ 290 บาท ทุกไซส์';
+  HOOD.forEach(function (r) {
+    var n = S.hood[r[0]] || 0, paid = n - (r[0] === f ? 1 : 0);
+    setRow('hood-' + r[0], n, paid * HOOD_PRICE);
+    if (r[0] === f) $('hood-' + r[0]).querySelector('.sum').textContent = paid ? baht(paid * HOOD_PRICE) + ' +ฟรี 1' : 'ฟรี';
+  });
+  TEE.forEach(function (r) { var n = S.tee[r[0]] || 0; setRow('tee-' + r[0], n, n * r[2]); });
+  setRow('umb-1', S.umbrella, S.umbrella * UMB_PRICE);
+  var c = calc(priced(S)), bits = [], hoodN = c.hoodExtra + (f ? 1 : 0);
+  if (hoodN) bits.push('Hood ' + hoodN + (f ? ' (ฟรี 1)' : ''));
+  if (c.teeN) bits.push('เสื้อยืด ' + c.teeN);
+  if (S.umbrella) bits.push('ร่ม ' + S.umbrella);
+  $('barItems').textContent = bits.length ? bits.join(' · ') : (H.orders.length ? 'สั่งเพิ่มได้ เลือกสินค้าด้านบน' : 'ยังไม่ได้เลือกสินค้า');
+  $('barTotal').textContent = baht(c.total);
+  $('review').disabled = R.closed;
+  renderHoodNames();
+  store('wsc21-draft', S);
+}
+
+/* ---------- this parent's history (by email) ---------- */
+var emailTimer = null;
+var histVer = 0; // bumped on every lookup/order/slip so a slow, older history reply can never overwrite newer data
+function onEmail() {
+  S.email = $('email').value; store('wsc21-draft', S);
+  clearTimeout(emailTimer);
+  emailTimer = setTimeout(lookupEmail, 600);
+}
+// common slips of the finger: the summary e-mail would bounce, so suggest the likely address (never blocks)
+var TYPOS = [[/\.con$/, '.com'], [/\.cmo$/, '.com'], [/\.comm$/, '.com'], [/\.co\.th\.com$/, '.co.th'],
+  [/@(gmial|gamil|gmai|gmal|gnail|gmaill)\./, '@gmail.'], [/@gmail\.co$/, '@gmail.com'],
+  [/@(hotmial|hotmal|hotmil|hotmai)\./, '@hotmail.'], [/@hotmail\.co$/, '@hotmail.com'], [/@(yaho|yahooo)\./, '@yahoo.']];
+function checkEmailTypo() {
+  var em = normEmail($('email').value), fix = em, box = $('emailTypo');
+  TYPOS.forEach(function (t) { fix = fix.replace(t[0], t[1]); });
+  if (!EMAIL_RE.test(em) || fix === em) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = '<div class="head"><span class="pill warn">อีเมลอาจพิมพ์ผิด</span> หมายถึง <b>' + esc(fix) + '</b> หรือเปล่า</div>' +
+    '<div><button type="button" class="btn ghost" id="useFix" data-fix="' + esc(fix) + '">ใช้ ' + esc(fix) + '</button></div>' +
+    '<div class="hint">ถ้าอีเมลผิด ใบสรุปยอดจะส่งไม่ถึง</div>';
+}
+function lookupEmail() {
+  var em = normEmail(S.email);
+  if (!EMAIL_RE.test(em)) { H = { email: '', orders: [], slips: [], loading: false }; renderHistory(); update(); return; }
+  if (em === H.email && !H.loading) return;
+  var ver = ++histVer;
+  H = { email: em, orders: [], slips: [], loading: true }; renderHistory();
+  getJSON('action=mine&email=' + encodeURIComponent(em), 'orders').then(function (d) {
+    if (ver !== histVer || normEmail(S.email) !== em) return;
+    H = { email: em, orders: (d && d.ok && d.orders) || [], slips: (d && d.ok && d.slips) || [], loading: false };
+    renderHistory(); update();
+  }).catch(function () { if (ver === histVer) { H.loading = false; renderHistory(); } });
+}
+function renderHistory() {
+  var box = $('history');
+  renderPay();
+  if (!H.email) { box.hidden = true; return; }
+  box.hidden = false;
+  if (H.loading) { box.innerHTML = '<span class="hint">กำลังดูยอดที่เคยสั่งของอีเมลนี้…</span>'; return; }
+  if (!H.orders.length) { box.innerHTML = '<div class="head"><span class="pill ok">ใหม่</span> อีเมลนี้ยังไม่เคยสั่ง</div>'; return; }
+  var m = merge(H.orders), c = calc(m), sum = H.orders.reduce(function (t, o) { return t + (o.total || 0); }, 0);
+  box.innerHTML = '<div class="head"><span class="pill fund">เคยสั่งแล้ว ' + H.orders.length + ' ครั้ง</span> รวม ' + c.pieces + ' ชิ้น</div>' +
+    '<ul>' + H.orders.map(function (o) { return '<li><b>' + esc(o.id) + '</b> · ' + when(o.ts) + ' — ' + esc(itemsText(o)) + '</li>'; }).join('') + '</ul>' +
+    '<div class="sumline num"><span>ยอดที่สั่งไปแล้ว</span><span>' + baht(sum) + '</span></div>' +
+    '<div class="paystatus">สถานะการโอน <span class="pill ' + payStatus()[1] + '">' + payStatus()[0] + '</span>' + (leftSum() > 0 ? ' <span class="num">ค้าง ' + baht(leftSum()) + '</span>' : '') + '</div>' +
+    (H.slips.length ? '<div class="num">แนบสลิปแล้ว ' + H.slips.length + ' ใบ รวม ' + baht(paidSum()) + '</div>' : '') +
+    '<div class="hint">สั่งเพิ่มได้เลย ระบบจะรวมยอดเข้าบ้านเดียวกัน</div>' +
+    '<div><button type="button" class="btn ghost" id="goPay">แนบสลิปโอนเงิน ↓</button></div>';
+}
+
+/* ---------- payment slip ---------- */
+function paidSum() { return H.slips.reduce(function (t, x) { return t + (x.rejected ? 0 : Number(x.amount) || 0); }, 0); }
+function dueSum() { return H.orders.reduce(function (t, o) { return t + (o.total || 0); }, 0); }
+function leftSum() { return Math.max(0, Math.round((dueSum() - paidSum()) * 100) / 100); }
+// same wording as the admin page and the e-mail
+function payStatus() {
+  var live = H.slips.filter(function (x) { return !x.rejected; });
+  if (leftSum() > 0) return paidSum() > 0 ? ['โอนไม่ครบ', 'warn'] : live.length < H.slips.length ? ['สลิปไม่ผ่าน รอแนบใหม่', 'warn'] : ['ยังไม่ได้โอน', 'warn'];
+  return live.some(function (x) { return !x.checked; }) ? ['แนบสลิปครบแล้ว รอกรรมการตรวจ', 'fund'] : ['ชำระครบ กรรมการยืนยันแล้ว', 'ok'];
+}
+function renderPay() {
+  var has = !!(H.email && H.orders.length);
+  $('payBody').hidden = !has; $('payLock').hidden = has;
+  if (!has) return;
+  var due = dueSum(), paid = paidSum(), left = leftSum(), st = payStatus();
+  $('paySum').innerHTML = '<div><b>ยอดสั่ง</b><strong>' + baht(due) + '</strong></div>' +
+    '<div class="paid"><b>ชำระแล้ว</b><strong>' + baht(paid) + '</strong></div>' +
+    '<div class="due"><b>คงเหลือ</b><strong>' + baht(left) + '</strong></div>' +
+    '<div class="paystatus">สถานะ <span class="pill ' + st[1] + '">' + st[0] + '</span></div>';
+  $('payDone').hidden = left > 0; $('payUpload').hidden = left <= 0;
+  $('payDue').innerHTML = '<b>ยอดที่ต้องโอน</b><strong>' + baht(left) + '</strong>';
+  $('paySlips').innerHTML = H.slips.map(function (x) {
+    return '<div class="sliprow num"><span><b>' + esc(x.id) + '</b> · ' + when(x.ts) + ' · ' + baht(Number(x.amount) || 0) + '</span>' +
+      (x.rejected ? '<span class="pill warn">ไม่ผ่าน</span>' : x.checked ? '<span class="pill ok">กรรมการยืนยันแล้ว</span>' : '<span class="pill wait">รอตรวจ</span>') +
+      (x.rejected && x.reason ? '<div class="hint" style="flex-basis:100%">เหตุผล: ' + esc(x.reason) + ' · กรุณาโอน/แนบสลิปใหม่</div>' : '') + '</div>';
+  }).join('');
+  payReady();
+}
+function payAmount() { return leftSum(); }
+function payReady() { $('paySend').disabled = !(P.image && payAmount() > 0 && H.orders.length); }
+function shrink(file) {
+  return new Promise(function (resolve, reject) {
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      var w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, 1400 / Math.max(w, h));
+      var c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+      var ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      var q = 0.8, out = c.toDataURL('image/jpeg', q);
+      while (out.length > 1400000 && q > 0.35) { q -= 0.15; out = c.toDataURL('image/jpeg', q); }
+      resolve(out);
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('เปิดรูปนี้ไม่ได้ ลองเลือกเป็นไฟล์ JPG หรือ PNG')); };
+    img.src = url;
+  });
+}
+function pickSlip() {
+  var f = $('payFile').files && $('payFile').files[0];
+  $('payErr').hidden = true; $('payOk').hidden = true;
+  if (!f) return;
+  P.image = ''; payReady();   // the old picture must not go out while the new one is still being prepared
+  $('payPickText').textContent = 'กำลังเตรียมรูป…';
+  shrink(f).then(function (data) {
+    P.image = data; P.cid = newCid();
+    $('payPreview').src = data; $('payPreview').hidden = false;
+    $('payPickText').textContent = 'เปลี่ยนรูปสลิป';
+    payReady();
+  }).catch(function (e) {
+    P.image = ''; $('payPreview').hidden = true; $('payPickText').textContent = '+ เลือกรูปสลิป';
+    $('payErr').hidden = false; $('payErr').textContent = e.message; payReady();
+  });
+}
+function postSlip(payload, tries) {
+  return call(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'slip', slip: payload }) }, 90000, 'slip')
+    .catch(function (e) {
+      if (tries > 0) return wait(1500).then(function () { return postSlip(payload, tries - 1); });
+      return getJSON('action=mine&email=' + encodeURIComponent(payload.email), 'orders').then(function (d) {
+        var hit = d && d.slips && d.slips.filter(function (x) { return x.cid === payload.cid; })[0];
+        if (hit) return { ok: true, slip: hit, slips: d.slips };
+        throw e;
+      });
+    });
+}
+function sendSlip() {
+  var btn = $('paySend'), em = normEmail($('email').value);
+  if (!P.image || !payAmount() || em !== H.email) return;
+  btn.disabled = true; btn.textContent = 'กำลังตรวจสลิป… (10–20 วินาที)'; $('payErr').hidden = true; $('payOk').hidden = true;
+  postSlip({ email: em, amount: payAmount(), image: P.image, cid: P.cid }, 2).then(function (d) {
+    if (!d || !d.ok) {   // the server read the slip and said no: show why, keep the picture so they can pick another
+      $('payErr').hidden = false; $('payErr').textContent = (d && d.error) || 'ส่งไม่สำเร็จ';
+      P.cid = newCid();
+      return;
+    }
+    histVer++;
+    H.slips = d.slips || H.slips.concat([d.slip]);
+    P = { image: '', cid: '' };
+    $('payFile').value = ''; $('payPreview').hidden = true; $('payPickText').textContent = '+ เลือกรูปสลิป';
+    $('payOk').hidden = false;
+    $('payOk').textContent = 'ส่งสลิป ' + d.slip.id + ' แล้ว ยอด ' + baht(Number(d.slip.amount) || 0) + ' · ' +
+      (d.slip.ocr === 'match' ? 'ระบบอ่านยอดในสลิปตรง ' : d.slip.ocr === 'unreadable' ? 'ระบบอ่านยอดในสลิปไม่ได้ กรรมการจะตรวจให้ ' : '') +
+      'รอกรรมการยืนยัน · ยืนยันแล้วจะส่งใบสรุปยอดไปที่ ' + em + (d.mailed ? ' (ส่งแล้ว)' : '');
+    renderHistory();
+  }).catch(function (e) {
+    $('payErr').hidden = false; $('payErr').textContent = 'ส่งไม่สำเร็จ: ' + e.message + ' · กดส่งอีกครั้งได้ ระบบจะไม่บันทึกซ้ำ';
+  }).then(function () { btn.textContent = 'ส่งสลิป'; payReady(); });
+}
+
+/* ---------- name duplicate ---------- */
+function checkName() {
+  var k = nameKey(S.name), box = $('nameDup');
+  if (k.length < 2 || !R.orderers.length || H.orders.length) { box.hidden = true; return; }
+  var hits = R.orderers.filter(function (o) { var ok = nameKey(o.name); return ok === k || (Math.min(ok.length, k.length) >= 3 && (ok.indexOf(k) >= 0 || k.indexOf(ok) >= 0)); });
+  if (!hits.length) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = '<div class="head"><span class="pill warn">มีชื่อนี้แล้ว</span> มีคำสั่งซื้อชื่อคล้ายกันอยู่แล้ว</div><ul>' +
+    hits.slice(0, 4).map(function (h) { return '<li>' + esc(h.name) + ' · ' + when(h.ts) + '</li>'; }).join('') +
+    '</ul><div class="hint">ถ้าเป็นบ้านเดียวกัน ใช้อีเมลเดิมเพื่อดูยอดที่เคยสั่ง</div>';
+}
+
+/* ---------- remote ---------- */
+function refresh() {
+  return getJSON('', 'orderers', 2).then(function (d) {
+    if (!d || !d.ok) return;
+    R.orderers = d.orderers || []; R.closed = !!d.closed; R.loaded = true;
+    checkName(); renderClosing(); update();
+  }).catch(function () {});
+}
+function renderClosing() {
+  var el = $('closing');
+  if (R.closed) { el.textContent = 'ปิดรับคำสั่งซื้อแล้ว'; el.classList.add('shut'); return; }
+  var days = Math.floor((CLOSE_AT.getTime() - Date.now()) / 86400000);
+  el.textContent = 'ปิดรับ 30 ต.ค. 69 · ' + (days <= 1 ? 'วันสุดท้าย' : 'เหลือ ' + days + ' วัน');
+}
+
+/* ---------- review & submit ---------- */
+function slipHTML(o, c, withWho) {
+  var L = [];
+  unitsOf(o).forEach(function (u) { L.push(['Hood ' + u.size + (u.name ? ' · ชื่อ ' + u.name : '') + (u.free ? ' (ตัวฟรี)' : ''), u.free ? 'ฟรี' : baht(HOOD_PRICE)]); });
+  TEE.forEach(function (r) { var n = o.tee[r[0]]; if (n) L.push(['เสื้อยืด ' + r[0] + ' × ' + n, baht(n * r[2])]); });
+  if (o.umbrella) L.push(['ร่ม × ' + o.umbrella, baht(o.umbrella * UMB_PRICE)]);
+  var h = '<div class="slip num">' + (withWho ? '<div class="who">' + esc(o.name) + ' · ' + esc(normEmail(o.email)) + (o.contact ? ' · ' + esc(o.contact) : '') + '</div>' : '') +
+    L.map(function (l) { return '<div class="ln"><span>' + esc(l[0]) + '</span><span>' + l[1] + '</span></div>'; }).join('') +
+    '<div class="ln tot"><span>' + (withWho ? 'ยอดครั้งนี้' : 'ยอดรวม') + '</span><span>' + baht(c.total) + '</span></div>';
+  if (o.note) h += '<div class="ln muted"><span>หมายเหตุ: ' + esc(o.note) + '</span></div>';
+  return h + '</div>';
+}
+function grandHTML(orders, label) {
+  if (!orders.length) return '';
+  var m = merge(orders), c = calc(m), sum = orders.reduce(function (t, o) { return t + (o.total || 0); }, 0);
+  return '<div class="history"><div class="head">' + label + ' <span class="pill fund">' + orders.length + ' ครั้ง · ' + c.pieces + ' ชิ้น</span></div>' +
+    '<div>' + esc(itemsText(m)) + '</div>' +
+    '<div class="sumline num"><span>ยอดรวมทั้งบ้าน</span><span>' + baht(sum) + '</span></div></div>';
+}
+function openSheet(html) { $('panel').innerHTML = html; $('sheet').hidden = false; document.body.style.overflow = 'hidden'; }
+function closeSheet() { $('sheet').hidden = true; document.body.style.overflow = ''; }
+function review() {
+  S.name = $('name').value.trim(); S.email = $('email').value.trim(); S.contact = $('contact').value.trim(); S.note = $('note').value.trim();
+  var v = priced(S), c = calc(v), errs = [];
+  if (!S.name) errs.push('กรอกชื่อผู้สั่ง');
+  if (!EMAIL_RE.test(normEmail(S.email))) errs.push('กรอกอีเมลผู้ปกครองให้ถูกต้อง');
+  if (!c.any) errs.push('เลือกสินค้าอย่างน้อย 1 รายการ');
+  var noName = v.hoodUnits.filter(function (u) { return !u.name; }).length;
+  var badName = v.hoodUnits.filter(function (u) { return u.name && nameProblem(u.name); });
+  if (noName) errs.push('ใส่ชื่อที่จะสกรีนบนกระเป๋า Hood ให้ครบทุกตัว (ยังขาด ' + noName + ' ตัว)');
+  if (badName.length) errs.push('ชื่อที่สกรีนต้องเป็นภาษาอังกฤษ A-Z เท่านั้น ไม่มีตัวเลขหรือตัวพิเศษ: ' + badName.map(function (u) { return u.name; }).join(', '));
+  if (noName || badName.length) pendingFocus = true;
+  if (errs.length) {
+    openSheet('<h2 id="sheetTitle">ยังขาดข้อมูล</h2><div class="err">' + errs.join('<br>') + '</div><button type="button" class="btn primary" data-close>กลับไปแก้</button>');
+    return;
+  }
+  var mine = H.email === normEmail(S.email) ? H.orders : [];
+  var after = mine.concat([{ hoodFree: v.hoodFree, hood: v.hood, hoodUnits: v.hoodUnits, tee: v.tee, umbrella: v.umbrella, total: c.total }]);
+  var twin = mine.filter(function (o) { return orderSig(o) === orderSig(v); });
+  openSheet('<h2 id="sheetTitle">ตรวจสอบรายการ</h2>' +
+    (twin.length ? '<div class="result taken"><div class="head"><span class="pill warn">อาจสั่งซ้ำ</span> อีเมลนี้เคยสั่งรายการเดียวกันนี้แล้ว</div><ul>' +
+      twin.map(function (o) { return '<li>' + esc(o.id) + ' · ' + when(o.ts) + ' · ' + baht(o.total || 0) + '</li>'; }).join('') +
+      '</ul><div class="hint">ถ้าตั้งใจสั่งเพิ่มอีกชุด กดยืนยันได้เลย ถ้าไม่ใช่ กด "แก้ไข"</div></div>' : '') +
+    slipHTML(v, c, true) +
+    (mine.length ? grandHTML(after, 'รวมกับที่เคยสั่งไว้') : '') +
+    '<div class="err" id="sendErr" hidden></div>' +
+    '<div class="actions"><button type="button" class="btn ghost" data-close>แก้ไข</button><button type="button" class="btn sunbtn" id="send">' + (twin.length ? 'ยืนยันสั่งซ้ำ' : 'ยืนยันสั่งซื้อ') + '</button></div>');
+}
+// send once; if the reply gets lost, retry with the same cid (the server ignores repeats) and finally look it up by email
+function postOrder(payload, tries) {
+  return call(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'order', order: payload }) }, 30000, 'order')
+    .catch(function (e) {
+      if (tries > 0) return wait(1500).then(function () { return postOrder(payload, tries - 1); });
+      return getJSON('action=mine&email=' + encodeURIComponent(normEmail(payload.email)), 'orders').then(function (d) {
+        var hit = d && d.orders && d.orders.filter(function (o) { return o.cid === payload.cid; })[0];
+        if (hit) return { ok: true, order: hit, orders: d.orders, dupes: [] };
+        throw e;
+      });
+    });
+}
+function send() {
+  var btn = $('send'); btn.disabled = true; btn.textContent = 'กำลังส่ง…';
+  if (!S.cid) S.cid = newCid();
+  var sent = JSON.parse(JSON.stringify(S));
+  sent.hoodNames = {};
+  hoodUnits(S).forEach(function (u) { (sent.hoodNames[u.size] = sent.hoodNames[u.size] || [])[u.idx] = u.name; });
+  postOrder(sent, 2)
+    .then(function (d) {
+      if (!d || !d.ok) throw new Error((d && d.error) || 'ส่งไม่สำเร็จ');
+      var o = d.order, saved = { name: o.name, email: sent.email, contact: sent.contact, note: o.note, hoodFree: o.hoodFree, hood: o.hood, hoodUnits: o.hoodUnits, tee: o.tee, umbrella: o.umbrella }, c = calc(saved);
+      histVer++;
+      H = { email: normEmail(sent.email), orders: d.orders || [o], slips: d.slips || H.slips || [], loading: false };
+      openSheet('<div class="done"><div class="big">สั่งเรียบร้อยแล้ว</div></div><div>เลขที่คำสั่งซื้อ <span class="code">' + esc(o.id) + '</span></div>' +
+        slipHTML(saved, c, true) + grandHTML(H.orders, 'ทั้งหมดของอีเมลนี้') +
+        (d.mailed ? '<div class="okmsg">ส่งใบสรุปยอดไปที่ ' + esc(normEmail(sent.email)) + ' แล้ว (ถ้าไม่เห็นให้ดูในโฟลเดอร์ Spam/Promotions)</div>' : '') +
+        '<p class="hint">กด "แนบสลิปโอนเงิน" เพื่อสแกน QR โอนเงินและแนบสลิป · เมื่อกรรมการยืนยันยอดแล้ว จะส่งใบสรุปยอดไปที่อีเมลนี้ · แคปหน้าจอนี้เก็บไว้ได้ ต้องการแก้ไขแจ้งกรรมการพร้อมเลขที่คำสั่งซื้อ · สั่งเพิ่มได้ด้วยอีเมลเดิม</p>' +
+        '<div class="actions"><button type="button" class="btn ghost" id="again">เสร็จสิ้น</button><button type="button" class="btn sunbtn" id="toPay">แนบสลิปโอนเงิน</button></div>');
+      S = blank(sent);
+      $('note').value = '';
+      update(); renderHistory(); refresh();
+    })
+    .catch(function (e) {
+      var el = $('sendErr');
+      if (el) { el.hidden = false; el.textContent = 'ส่งไม่สำเร็จ: ' + e.message + ' · กดส่งอีกครั้งได้ ระบบจะไม่บันทึกซ้ำ'; }
+      btn.disabled = false; btn.textContent = 'ยืนยันสั่งซื้อ';
+    });
+}
+
+/* ---------- wire up ---------- */
+(function init() {
+  var d = load('wsc21-draft');
+  if (d && typeof d === 'object') {
+    S = blank(d); S.note = d.note || ''; S.hoodFirst = d.hoodFirst || d.hoodFree || '';
+    S.hood = d.hood || {}; S.hoodNames = d.hoodNames || {}; S.tee = d.tee || {}; S.umbrella = d.umbrella || 0; S.cid = d.cid || '';
+    if (d.hoodFree) S.hood[d.hoodFree] = (S.hood[d.hoodFree] || 0) + 1;
+  }
+  $('name').value = S.name; $('email').value = S.email; $('contact').value = S.contact; $('note').value = S.note;
+  buildHoodChart(); buildRows(); renderClosing(); update();
+  if (S.email) { lookupEmail(); checkEmailTypo(); }
+  $('name').addEventListener('input', function () { S.name = this.value; checkName(); store('wsc21-draft', S); });
+  $('email').addEventListener('input', onEmail);
+  $('email').addEventListener('input', checkEmailTypo);
+  $('emailTypo').addEventListener('click', function (e) {
+    var b = e.target.closest('#useFix'); if (!b) return;
+    $('email').value = b.getAttribute('data-fix'); onEmail(); checkEmailTypo(); clearTimeout(emailTimer); lookupEmail();
+  });
+  $('email').addEventListener('blur', function () { clearTimeout(emailTimer); lookupEmail(); });
+  $('contact').addEventListener('input', function () { S.contact = this.value; store('wsc21-draft', S); });
+  $('note').addEventListener('input', function () { S.note = this.value; store('wsc21-draft', S); });
+  $('hoodNameRows').addEventListener('input', function (e) {
+    var el = e.target; if (!el.matches('input[data-size]')) return;
+    var size = el.getAttribute('data-size'), i = Number(el.getAttribute('data-i'));
+    (S.hoodNames[size] = S.hoodNames[size] || [])[i] = el.value;
+    checkNameInput(el); store('wsc21-draft', S);
+  });
+  $('review').addEventListener('click', review);
+  $('payFile').addEventListener('change', pickSlip);
+  $('paySend').addEventListener('click', sendSlip);
+  $('history').addEventListener('click', function (e) { if (e.target.id === 'goPay') $('payCard').scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+  $('sheet').addEventListener('click', function (e) {
+    if (e.target.id === 'toPay') { closeSheet(); $('payCard').scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+    else if (e.target === $('sheet') || e.target.closest('[data-close]') || e.target.id === 'again') {
+      closeSheet();
+      if (pendingFocus) { pendingFocus = false; focusNameIssue(); }
+    }
+    else if (e.target.id === 'send') send();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+  refresh();
+  setInterval(function () { if (!document.hidden) refresh(); }, 45000);
+})();
