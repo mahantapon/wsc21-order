@@ -11,9 +11,9 @@ css = read('style.css').replace('url(../img/', 'url(' + img)
 body = read('body.html').replace('IMG/', img)
 ribbon = '<div class="demo-ribbon">หน้าตัวอย่างดีไซน์ (Demo) · กดลองได้ทุกปุ่ม แต่ไม่บันทึกคำสั่งซื้อและสลิปจริง</div>' if mode == 'demo' else ''
 body = body.replace('<!--RIBBON-->', ribbon)
-title = 'สั่งเสื้อรุ่น 21 · ตัวอย่างดีไซน์' if mode == 'demo' else 'สั่งเสื้อรุ่น 21'
+title = 'สั่งเสื้อรุ่น 21 · ตัวอย่างดีไซน์' if mode == 'demo' else 'สั่งเสื้อ NO limit 21'
 meta = ('<meta name="robots" content="noindex, nofollow">' if mode == 'demo' else
-        '<meta property="og:title" content="สั่งเสื้อฮู้ด · เสื้อยืด · ร่ม — รุ่น 21">\n'
+        '<meta property="og:title" content="สั่งเสื้อ Hood · เสื้อยืด · ร่ม — NO limit รุ่น 21">\n'
         '<meta property="og:description" content="เห็นราคาทุกไซส์ คิดยอดให้อัตโนมัติ และแนบสลิปโอนเงินได้ · ปิดรับ 30 ต.ค. 69">\n'
         '<meta property="og:image" content="https://mahantapon.github.io/wsc21-order/img/hood.jpg">')
 scripts = '<script>\n' + read('app.js') + '</script>\n<script>\n' + read('extra.js') + '</script>\n'
@@ -25,7 +25,7 @@ html = f"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{title}</title>
-<meta name="description" content="สั่งเสื้อฮู้ด เสื้อยืดผู้ปกครอง และร่ม รุ่น 21 พร้อมราคาทุกไซส์ คิดยอดให้อัตโนมัติ และแนบสลิปโอนเงินได้">
+<meta name="description" content="สั่งเสื้อ Hood เสื้อยืดผู้ปกครอง และร่ม พร้อมราคาทุกไซส์ คิดยอดให้อัตโนมัติ และแนบสลิปโอนเงินได้">
 {meta}
 <link rel="icon" href="{img}school-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
