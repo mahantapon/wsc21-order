@@ -233,16 +233,22 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function
 function baht(n) { return (n || 0).toLocaleString('th-TH') + ' ฿'; }
 function when(iso) { try { return new Date(iso).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
 function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-function ss(k, v) { try { if (v === undefined) return sessionStorage.getItem(k) || ''; if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { return ''; } }
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k) || ''; if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return ''; } }
 function itemName(i) { return i === 'tee' ? 'เสื้อยืด' : 'Hood'; }
 
-function call(url, opts, key, tries) {
+// ms: give up on a stalled request and retry (only for reads/login — repeating them is harmless); the last try waits as long as it takes
+function call(url, opts, key, tries, ms) {
   tries = tries == null ? 2 : tries;
-  return fetch(url, opts).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function (d) { if (!d || (d.ok !== false && key && !(key in d))) throw new Error('ตอบกลับไม่ครบ'); return d; })
-    .catch(function (e) { if (tries <= 0) throw e; return wait(1200).then(function () { return call(url, opts, key, tries - 1); }); });
+  var ctl = ms && tries > 0 && window.AbortController ? new AbortController() : null, timer = ctl && setTimeout(function () { ctl.abort(); }, ms);
+  return fetch(url, ctl ? Object.assign({ signal: ctl.signal }, opts) : opts).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) { clearTimeout(timer); if (!d || (d.ok !== false && key && !(key in d))) throw new Error('ตอบกลับไม่ครบ'); return d; })
+    .catch(function (e) {
+      clearTimeout(timer);
+      if (tries <= 0) throw e;
+      return wait(1200).then(function () { return call(url, opts, key, tries - 1, ms); });
+    });
 }
-function post(body, key) { return call(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) }, key); }
+function post(body, key, ms) { return call(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) }, key, null, ms); }
 function toast(t) { var el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, 2200); }
 function copy(text) {
   var done = function () { toast('คัดลอกแล้ว'); };
@@ -254,20 +260,21 @@ function copy(text) {
 $('loginForm').addEventListener('submit', function (e) {
   e.preventDefault();
   var btn = $('loginBtn'); btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ…'; $('loginErr').hidden = true;
-  post({ action: 'login', user: $('user').value, pass: $('pass').value }, 'token').then(function (d) {
+  post({ action: 'login', user: $('user').value, pass: $('pass').value }, 'token', 10000).then(function (d) {
     if (!d.ok) throw new Error(d.error);
-    token = d.token; ss('wsc21-token', token); $('pass').value = '';
-    return loadData();
+    token = d.token; store('wsc21-token', token); $('pass').value = '';
+    if (d.data) show(d.data); else return loadData();
   }).catch(function (err) { $('loginErr').hidden = false; $('loginErr').textContent = err.message; })
     .then(function () { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; });
 });
-function logout() { token = ''; ss('wsc21-token', null); D = null; $('dash').hidden = true; $('loginCard').hidden = false; }
+function logout() { token = ''; store('wsc21-token', null); D = null; $('dash').hidden = true; $('loginCard').hidden = false; }
 $('logout').addEventListener('click', logout);
 
+function show(d) { D = d; $('loginCard').hidden = true; $('dash').hidden = false; render(); }
 function loadData() {
-  return call(API + '?action=admin&token=' + encodeURIComponent(token), { cache: 'no-store' }, 'orders').then(function (d) {
+  return call(API + '?action=admin&token=' + encodeURIComponent(token), { cache: 'no-store' }, 'orders', null, 10000).then(function (d) {
     if (!d.ok) { if (d.error === 'AUTH') { logout(); throw new Error('หมดเวลาเข้าสู่ระบบ กรุณาเข้าใหม่'); } throw new Error(d.error); }
-    D = d; $('loginCard').hidden = true; $('dash').hidden = false; render();
+    show(d);
   });
 }
 $('reload').addEventListener('click', function () { loadData().then(function () { toast('อัปเดตแล้ว'); }).catch(function (e) { toast(e.message); }); });
@@ -596,8 +603,15 @@ $('clearGo').addEventListener('click', function () {
   }).catch(function (e) { toast(e.message); }).then(function () { btn.textContent = 'ลบข้อมูลทั้งหมด'; });
 });
 
-token = ss('wsc21-token');
-if (token) loadData().catch(function () { logout(); });
+// login is kept on this device until it expires on the server (6 hours) or ออกจากระบบ is pressed
+token = store('wsc21-token');
+if (token) {
+  $('loginBtn').disabled = true; $('loginBtn').textContent = 'กำลังโหลดข้อมูล…';
+  loadData().catch(function (e) { logout(); $('loginErr').hidden = false; $('loginErr').textContent = e.message; })
+    .then(function () { $('loginBtn').disabled = false; $('loginBtn').textContent = 'เข้าสู่ระบบ'; });
+} else {
+  fetch(API + '?action=ping').catch(function () {}); // wake the backend while the password is being typed
+}
 </script>
 </body>
 </html>
