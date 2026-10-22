@@ -40,16 +40,16 @@ h2 { font-family: var(--f-display); font-size: 22px; font-weight: 800; margin: 0
 .marks .nolimit { width: 150px; height: auto; }
 
 /* dashboard header bar */
-.deskhead { background: var(--ink); color: #fff; border-radius: 22px; padding: 14px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 4px 4px 0 var(--sky); }
-.deskhead .marks .badge { border-color: var(--sun); }
+.deskhead { background: linear-gradient(115deg, #bfe6f8 0%, #e2f4fc 38%, #fff7da 72%, #ffe58a 100%); color: var(--ink); border: 2px solid rgba(29, 155, 215, .35); border-radius: 22px; padding: 14px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 10px 26px rgba(29, 155, 215, .18); }
+.deskhead .marks .badge { border-color: var(--sky); }
 .deskhead .marks { flex-wrap: wrap; min-width: 0; }
-.deskhead .marks .nolimit { width: 120px; opacity: .95; }
-@media (max-width: 520px) { .deskhead .marks .nolimit { display: none; } .deskhead h1 { font-size: 21px; } }
-.deskhead h1 { color: #fff; font-size: 24px; }
-.deskhead .who { color: #c9d3de; font-size: 13px; }
+.deskhead .marks .nolimit { width: 130px; }
+@media (max-width: 520px) { .deskhead .marks .nolimit { width: 104px; } .deskhead h1 { font-size: 21px; } }
+.deskhead h1 { color: var(--ink); font-size: 24px; }
+.deskhead .who { color: #3d5566; font-size: 13px; }
 .deskhead .btn { box-shadow: none; }
-.deskhead .btn:not(.sun):not(.danger) { background: transparent; color: #fff; border-color: rgba(255,255,255,.55); }
-.deskhead .btn.danger { background: transparent; color: #ff9c90; border-color: #ff9c90; }
+.deskhead .btn:not(.sun):not(.danger) { background: rgba(255, 255, 255, .75); }
+.deskhead .btn.danger { background: rgba(255, 255, 255, .75); color: var(--coral); border-color: var(--coral); }
 
 /* buttons */
 .btn { border: 2px solid var(--ink); border-radius: 12px; padding: 8px 14px; font-weight: 800; cursor: pointer; background: var(--paper); box-shadow: var(--shadow-sm); transition: transform .1s, box-shadow .1s; }
