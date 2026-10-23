@@ -103,7 +103,11 @@
     <div class="okmsg" id="payDone" hidden>ชำระครบแล้ว ไม่มียอดค้าง · ถ้าสั่งเพิ่ม ยอดใหม่จะขึ้นที่นี่</div>
     <div class="paybody" id="payUpload">
     <div class="dueline num" id="payDue"></div>
-    <p class="hint">โอนผ่าน QR ด้านบน <b>ตามยอดนี้พอดี</b> แล้วแนบรูปสลิป ระบบจะอ่านยอดในสลิป ถ้าไม่ตรงกับยอดที่ต้องโอนจะไม่รับ · ใช้สลิปเดิมซ้ำไม่ได้</p>
+    <p class="hint">โอนผ่าน QR ด้านบน จะโอนครั้งเดียวหรือแบ่งหลายสลิปก็ได้ <b>แต่ทุกสลิปรวมกันต้องเท่ากับยอดสั่งซื้อพอดี</b> · กรอกยอดของสลิปใบนี้แล้วแนบรูป ระบบจะอ่านยอดในสลิป ถ้าไม่ตรงกับที่กรอกจะไม่รับ · ใช้สลิปเดิมซ้ำไม่ได้</p>
+    <label class="field" for="payAmt"><span>ยอดเงินในสลิปใบนี้ (บาท) <span class="req">*</span></span>
+      <input type="text" id="payAmt" inputmode="decimal" autocomplete="off">
+      <span class="hint" id="payAmtHint" style="font-weight:400" hidden></span>
+    </label>
     <label class="filepick" for="payFile">
       <input type="file" id="payFile" accept="image/*">
       <span id="payPickText">+ เลือกรูปสลิป</span>

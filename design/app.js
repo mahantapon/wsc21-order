@@ -286,6 +286,8 @@ function renderPay() {
     '<div class="paystatus">สถานะ <span class="pill ' + st[1] + '">' + st[0] + '</span></div>';
   $('payDone').hidden = left > 0; $('payUpload').hidden = left <= 0;
   $('payDue').innerHTML = '<b>ยอดที่ต้องโอน</b><strong>' + baht(left) + '</strong>';
+  if (payAmtLeft !== left) { $('payAmt').value = left > 0 ? String(left) : ''; payAmtLeft = left; } // refill only when the balance itself changes
+  payAmtHint();
   $('paySlips').innerHTML = H.slips.map(function (x) {
     return '<div class="sliprow num"><span><b>' + esc(x.id) + '</b> · ' + when(x.ts) + ' · ' + baht(Number(x.amount) || 0) + '</span>' +
       (x.rejected ? '<span class="pill warn">ไม่ผ่าน</span>' : x.checked ? '<span class="pill ok">กรรมการยืนยันแล้ว</span>' : '<span class="pill wait">รอตรวจ</span>') +
@@ -293,7 +295,16 @@ function renderPay() {
   }).join('');
   payReady();
 }
-function payAmount() { return leftSum(); }
+// amount on this slip: several slips are fine, but each one at most the remaining balance so they add up to the order total exactly
+var payAmtLeft = null;
+function payAmtValue() { var v = Number(String($('payAmt').value || '').replace(/[^\d.]/g, '')); return isFinite(v) ? Math.round(v * 100) / 100 : 0; }
+function payAmount() { var v = payAmtValue(), left = leftSum(); return v > 0 && v <= left ? v : 0; }
+function payAmtHint() {
+  var v = payAmtValue(), left = leftSum(), el = $('payAmtHint'), msg = '';
+  if (v > left) msg = 'เกินยอดคงเหลือ ' + baht(left) + ' · ทุกสลิปรวมกันต้องเท่ากับยอดสั่งซื้อพอดี';
+  else if (v > 0 && v < left) msg = 'สลิปนี้ ' + baht(v) + ' · หลังจากนี้ยังค้าง ' + baht(Math.round((left - v) * 100) / 100) + ' ต้องแนบสลิปเพิ่มให้ครบ';
+  el.hidden = !msg; el.textContent = msg; el.style.color = v > left ? 'var(--coral)' : '';
+}
 function payReady() { $('paySend').disabled = !(P.image && payAmount() > 0 && H.orders.length); }
 function shrink(file) {
   return new Promise(function (resolve, reject) {
@@ -355,7 +366,8 @@ function sendSlip() {
     $('payOk').hidden = false;
     $('payOk').textContent = 'ส่งสลิป ' + d.slip.id + ' แล้ว ยอด ' + baht(Number(d.slip.amount) || 0) + ' · ' +
       (d.slip.ocr === 'match' ? 'ระบบอ่านยอดในสลิปตรง ' : d.slip.ocr === 'unreadable' ? 'ระบบอ่านยอดในสลิปไม่ได้ กรรมการจะตรวจให้ ' : '') +
-      'รอกรรมการยืนยัน · ยืนยันแล้วจะส่งใบสรุปยอดไปที่ ' + em + (d.mailed ? ' (ส่งแล้ว)' : '');
+      'รอกรรมการยืนยัน · ยืนยันแล้วจะส่งใบสรุปยอดไปที่ ' + em + (d.mailed ? ' (ส่งแล้ว)' : '') +
+      (leftSum() > 0 ? ' · ยังค้างอีก ' + baht(leftSum()) + ' แนบสลิปใบต่อไปได้เลย' : '');
     renderHistory();
   }).catch(function (e) {
     $('payErr').hidden = false; $('payErr').textContent = 'ส่งไม่สำเร็จ: ' + e.message + ' · กดส่งอีกครั้งได้ ระบบจะไม่บันทึกซ้ำ';
@@ -506,6 +518,7 @@ function send() {
   });
   $('review').addEventListener('click', review);
   $('payFile').addEventListener('change', pickSlip);
+  $('payAmt').addEventListener('input', function () { payAmtHint(); payReady(); });
   $('paySend').addEventListener('click', sendSlip);
   $('history').addEventListener('click', function (e) { if (e.target.id === 'goPay') $('payCard').scrollIntoView({ block: 'start', behavior: 'smooth' }); });
   $('sheet').addEventListener('click', function (e) {
